@@ -8,6 +8,8 @@ package org.fcitx.fcitx5.android.input
 import android.annotation.SuppressLint
 import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
+import androidx.core.content.ContextCompat
 import android.graphics.Outline
 import android.os.Build
 import android.view.View
@@ -100,9 +102,9 @@ class InputView(
         setOnClickListener(placeholderOnClickListener)
     }
 
-    private fun createHandleDrawable() = GradientDrawable().apply {
+    private fun createHandleDrawable(radius: Float = dp(5).toFloat()) = GradientDrawable().apply {
         setColor(theme.barColor)
-        cornerRadius = dp(5).toFloat()
+        cornerRadius = radius
         alpha = 0xAA
     }
 
@@ -156,6 +158,28 @@ class InputView(
         floatingBottomHandle.updateLayoutParams {
             width = viewLength
             height = viewThickness
+        }
+
+        // Move handle (centered horizontally above keyboard)
+        val moveHandleSize = dp(24)
+        floatingMoveHandle.translationX = kX + (kWidth - moveHandleSize) / 2
+        floatingMoveHandle.translationY = kY - moveHandleSize - dp(4)
+
+        val moveBgDrawable = createHandleDrawable(moveHandleSize / 2f)
+        val moveIconDrawable = ContextCompat.getDrawable(context, R.drawable.ic_move_handle_cross)?.mutate()
+        val finalDrawable = if (moveIconDrawable != null) {
+            moveIconDrawable.setTint(theme.keyTextColor)
+            val inset = dp(4)
+            val ld = LayerDrawable(arrayOf(moveBgDrawable, moveIconDrawable))
+            ld.setLayerInset(1, inset, inset, inset, inset)
+            ld
+        } else {
+            moveBgDrawable
+        }
+        floatingMoveHandle.background = finalDrawable
+        floatingMoveHandle.updateLayoutParams {
+            width = moveHandleSize
+            height = moveHandleSize
         }
     }
 
@@ -224,6 +248,47 @@ class InputView(
                     v.isPressed = false
                     // Height is already saved via delegate property set in ACTION_MOVE
                     // Also save position as resizing might have moved handlers
+                    floatingX = keyboardView.translationX.toInt()
+                    floatingY = keyboardView.translationY.toInt()
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private val floatingMoveHandle = view(::View) {
+        visibility = GONE
+        setOnTouchListener { v, event ->
+            if (!isFloating) return@setOnTouchListener false
+            v.parent?.requestDisallowInterceptTouchEvent(true)
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastTouchX = event.rawX
+                    lastTouchY = event.rawY
+                    v.isPressed = true
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - lastTouchX
+                    val dy = event.rawY - lastTouchY
+                    keyboardView.translationX += dx
+                    keyboardView.translationY += dy
+                    keyboardWindow.updateBounds()
+
+                    preedit.ui.root.translationX = keyboardView.translationX
+                    preedit.ui.root.translationY = keyboardView.translationY
+
+                    updateHandlePosition()
+
+                    lastTouchX = event.rawX
+                    lastTouchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                    v.isPressed = false
+                    keyboardWindow.updateBounds()
                     floatingX = keyboardView.translationX.toInt()
                     floatingY = keyboardView.translationY.toInt()
                     true
@@ -378,6 +443,7 @@ class InputView(
         val visibilityTarget = if (isFloating) VISIBLE else GONE
         floatingRightHandle.visibility = visibilityTarget
         floatingBottomHandle.visibility = visibilityTarget
+        floatingMoveHandle.visibility = visibilityTarget
     }
 
     private fun toggleFloatingMode() {
@@ -414,6 +480,12 @@ class InputView(
         if (floatingBottomHandle.visibility == View.VISIBLE) {
             val handleRect = Rect()
             floatingBottomHandle.getHitRect(handleRect)
+            rect.union(handleRect)
+        }
+
+        if (floatingMoveHandle.visibility == View.VISIBLE) {
+            val handleRect = Rect()
+            floatingMoveHandle.getHitRect(handleRect)
             rect.union(handleRect)
         }
 
@@ -633,6 +705,10 @@ class InputView(
             topToTop = ConstraintLayout.LayoutParams.PARENT_ID
         })
         add(floatingBottomHandle, lParams(dp(10), dp(10)) {
+            startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+            topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+        })
+        add(floatingMoveHandle, lParams(dp(24), dp(24)) {
             startToStart = ConstraintLayout.LayoutParams.PARENT_ID
             topToTop = ConstraintLayout.LayoutParams.PARENT_ID
         })

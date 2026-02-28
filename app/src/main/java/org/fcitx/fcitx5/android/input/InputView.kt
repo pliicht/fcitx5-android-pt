@@ -183,6 +183,30 @@ class InputView(
         }
     }
 
+    private fun clampFloatingPosition() {
+        if (!isFloating) return
+        val containerWidth = if (width > 0) width else resources.displayMetrics.widthPixels
+        val containerHeight = if (height > 0) height else resources.displayMetrics.heightPixels
+        val keyboardWidth = if (keyboardView.width > 0) keyboardView.width else resolveFloatingWidth()
+        val keyboardHeight = if (keyboardView.height > 0) {
+            keyboardView.height
+        } else {
+            resolveFloatingHeight() + dp(KawaiiBarComponent.HEIGHT) + keyboardBottomPaddingPx
+        }
+
+        val maxX = (containerWidth - keyboardWidth).coerceAtLeast(0)
+        val maxY = (containerHeight - keyboardHeight).coerceAtLeast(0)
+        val clampedX = keyboardView.translationX.coerceIn(0f, maxX.toFloat())
+        val clampedY = keyboardView.translationY.coerceIn(0f, maxY.toFloat())
+
+        if (clampedX != keyboardView.translationX || clampedY != keyboardView.translationY) {
+            keyboardView.translationX = clampedX
+            keyboardView.translationY = clampedY
+        }
+        preedit.ui.root.translationX = keyboardView.translationX
+        preedit.ui.root.translationY = keyboardView.translationY
+    }
+
     private val floatingRightHandle = view(::View) {
         // background set in updateHandlePosition
         visibility = GONE
@@ -212,8 +236,10 @@ class InputView(
                     v.isPressed = false
                     // Width is already saved via delegate property set in ACTION_MOVE
                     // Also save position as resizing might have moved handlers
-                    floatingX = keyboardView.translationX.toInt()
-                    floatingY = keyboardView.translationY.toInt()
+                    saveFloatingPosition(
+                        keyboardView.translationX.toInt(),
+                        keyboardView.translationY.toInt()
+                    )
                     true
                 }
                 else -> false
@@ -248,8 +274,10 @@ class InputView(
                     v.isPressed = false
                     // Height is already saved via delegate property set in ACTION_MOVE
                     // Also save position as resizing might have moved handlers
-                    floatingX = keyboardView.translationX.toInt()
-                    floatingY = keyboardView.translationY.toInt()
+                    saveFloatingPosition(
+                        keyboardView.translationX.toInt(),
+                        keyboardView.translationY.toInt()
+                    )
                     true
                 }
                 else -> false
@@ -274,6 +302,7 @@ class InputView(
                     val dy = event.rawY - lastTouchY
                     keyboardView.translationX += dx
                     keyboardView.translationY += dy
+                    clampFloatingPosition()
                     keyboardWindow.updateBounds()
 
                     preedit.ui.root.translationX = keyboardView.translationX
@@ -289,8 +318,10 @@ class InputView(
                     v.parent?.requestDisallowInterceptTouchEvent(false)
                     v.isPressed = false
                     keyboardWindow.updateBounds()
-                    floatingX = keyboardView.translationX.toInt()
-                    floatingY = keyboardView.translationY.toInt()
+                    saveFloatingPosition(
+                        keyboardView.translationX.toInt(),
+                        keyboardView.translationY.toInt()
+                    )
                     true
                 }
                 else -> false
@@ -376,8 +407,31 @@ class InputView(
     private val internalPrefs = AppPrefs.getInstance().internal
     private var floatingWidthPx by internalPrefs.floatingKeyboardWidth
     private var floatingHeightPx by internalPrefs.floatingKeyboardHeight
-    private var floatingX by internalPrefs.floatingKeyboardX
-    private var floatingY by internalPrefs.floatingKeyboardY
+    private var floatingXPortrait by internalPrefs.floatingKeyboardXPortrait
+    private var floatingYPortrait by internalPrefs.floatingKeyboardYPortrait
+    private var floatingXLandscape by internalPrefs.floatingKeyboardXLandscape
+    private var floatingYLandscape by internalPrefs.floatingKeyboardYLandscape
+
+    private val isLandscapeOrientation: Boolean
+        get() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    private fun getStoredFloatingPosition(): Pair<Int, Int> {
+        return if (isLandscapeOrientation) {
+            floatingXLandscape to floatingYLandscape
+        } else {
+            floatingXPortrait to floatingYPortrait
+        }
+    }
+
+    private fun saveFloatingPosition(x: Int, y: Int) {
+        if (isLandscapeOrientation) {
+            floatingXLandscape = x
+            floatingYLandscape = y
+        } else {
+            floatingXPortrait = x
+            floatingYPortrait = y
+        }
+    }
     
     private var floatingResizeStartWidth = 0
     private var floatingResizeStartHeight = 0
@@ -448,6 +502,12 @@ class InputView(
 
     private fun toggleFloatingMode() {
         popup.dismissAll()
+        if (isFloating) {
+            saveFloatingPosition(
+                keyboardView.translationX.toInt(),
+                keyboardView.translationY.toInt()
+            )
+        }
         isFloating = !isFloating
         kawaiiBar.setFloatingState(isFloating)
         updateFloatingState()
@@ -509,9 +569,10 @@ class InputView(
             layoutParams?.height = matchParent
 
             // In floating mode, we rely on translation.
-            if (floatingX != -1 && floatingY != -1) {
-                keyboardView.translationX = floatingX.toFloat()
-                keyboardView.translationY = floatingY.toFloat()
+            val (storedX, storedY) = getStoredFloatingPosition()
+            if (storedX != -1 && storedY != -1) {
+                keyboardView.translationX = storedX.toFloat()
+                keyboardView.translationY = storedY.toFloat()
             } else if (keyboardView.translationX == 0f && keyboardView.translationY == 0f) {
                 keyboardView.translationX = (resources.displayMetrics.widthPixels * 0.1).toFloat()
                 // Start a bit lower than center to avoid covering input field immediately if possible
@@ -521,7 +582,10 @@ class InputView(
             // Sync handles position
             updateHandlePosition()
             // Post update to ensure layout has happened
-            keyboardView.post { updateHandlePosition() }
+            keyboardView.post {
+                clampFloatingPosition()
+                updateHandlePosition()
+            }
 
             // Update preedit constraints for floating mode
             // It should be attached to top of keyboardView
@@ -740,6 +804,7 @@ class InputView(
                     val dy = event.rawY - lastTouchY
                     keyboardView.translationX += dx
                     keyboardView.translationY += dy
+                    clampFloatingPosition()
                     keyboardWindow.updateBounds()
                     // Sync preedit position
                     preedit.ui.root.translationX = keyboardView.translationX
@@ -755,8 +820,10 @@ class InputView(
                      v.parent?.requestDisallowInterceptTouchEvent(false)
                      keyboardWindow.updateBounds() // Ensure bounds are correct after drag
                      // Save position
-                     floatingX = keyboardView.translationX.toInt()
-                     floatingY = keyboardView.translationY.toInt()
+                     saveFloatingPosition(
+                        keyboardView.translationX.toInt(),
+                        keyboardView.translationY.toInt()
+                     )
                      true
                 }
                 else -> false
@@ -801,6 +868,12 @@ class InputView(
         }
         preedit.ui.root.setPadding(sidePadding, 0, sidePadding, 0)
         kawaiiBar.view.setPadding(sidePadding, 0, sidePadding, 0)
+        if (isFloating) {
+            keyboardView.post {
+                clampFloatingPosition()
+                updateHandlePosition()
+            }
+        }
         // Sync handles when size changes
         updateHandlePosition()
     }

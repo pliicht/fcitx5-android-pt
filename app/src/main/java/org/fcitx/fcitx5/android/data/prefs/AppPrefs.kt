@@ -37,8 +37,10 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val needNotifications = bool("need_notifications", true)
         val floatingKeyboardWidth = int("floating_keyboard_width", 0)
         val floatingKeyboardHeight = int("floating_keyboard_height", 0)
-        val floatingKeyboardX = int("floating_keyboard_x", -1)
-        val floatingKeyboardY = int("floating_keyboard_y", -1)
+        val floatingKeyboardXPortrait = int("floating_keyboard_x_portrait", -1)
+        val floatingKeyboardYPortrait = int("floating_keyboard_y_portrait", -1)
+        val floatingKeyboardXLandscape = int("floating_keyboard_x_landscape", -1)
+        val floatingKeyboardYLandscape = int("floating_keyboard_y_landscape", -1)
     }
 
     inner class Advanced : ManagedPreferenceCategory(R.string.advanced, sharedPreferences) {
@@ -407,8 +409,10 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
                 advanced.vivoKeypressWorkaround,
                 internal.floatingKeyboardWidth,
                 internal.floatingKeyboardHeight,
-                internal.floatingKeyboardX,
-                internal.floatingKeyboardY
+                internal.floatingKeyboardXPortrait,
+                internal.floatingKeyboardYPortrait,
+                internal.floatingKeyboardXLandscape,
+                internal.floatingKeyboardYLandscape
             ).forEach {
                 it.putValueTo(this@edit)
             }

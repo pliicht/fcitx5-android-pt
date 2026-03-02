@@ -5,12 +5,15 @@
 package org.fcitx.fcitx5.android.input.keyboard
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Rect
 import android.view.MotionEvent
 import android.view.View
 import androidx.annotation.CallSuper
+import androidx.annotation.Keep
 import androidx.annotation.DrawableRes
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.constraintlayout.widget.Guideline
 import androidx.core.view.children
 import androidx.core.view.updateLayoutParams
 import org.fcitx.fcitx5.android.core.FcitxKeyMapping
@@ -58,6 +61,8 @@ abstract class BaseKeyboard(
     private val popupOnKeyPress by prefs.keyboard.popupOnKeyPress
     private val expandKeypressArea by prefs.keyboard.expandKeypressArea
     private val swipeSymbolDirection by prefs.keyboard.swipeSymbolDirection
+    private val splitKeyboardLandscape = prefs.keyboard.splitKeyboardLandscape
+    private val splitKeyboardGapPercent = prefs.keyboard.splitKeyboardGapPercent
 
     private val spaceSwipeMoveCursor = prefs.keyboard.spaceSwipeMoveCursor
     private val spaceKeys = mutableListOf<KeyView>()
@@ -82,6 +87,26 @@ abstract class BaseKeyboard(
     private val bounds = Rect()
     private lateinit var keyRows: List<ConstraintLayout>
 
+    private var lastSplitLandscapeState = false
+
+    @Keep
+    private val splitKeyboardLandscapeListener = ManagedPreference.OnChangeListener<Boolean> { _, _ ->
+        reloadLayout()
+        reapplyTextScale()
+        requestLayout()
+        updateBounds()
+    }
+
+    @Keep
+    private val splitKeyboardGapPercentListener = ManagedPreference.OnChangeListener<Int> { _, _ ->
+        if (shouldUseSplitLandscapeLayout()) {
+            reloadLayout()
+            reapplyTextScale()
+            requestLayout()
+            updateBounds()
+        }
+    }
+
     /**
      * HashMap of [PointerId (Int)][MotionEvent.getPointerId] to [KeyView]
      */
@@ -91,55 +116,22 @@ abstract class BaseKeyboard(
         isMotionEventSplittingEnabled = true
         reloadLayout()
         spaceSwipeMoveCursor.registerOnChangeListener(spaceSwipeChangeListener)
+        splitKeyboardLandscape.registerOnChangeListener(splitKeyboardLandscapeListener)
+        splitKeyboardGapPercent.registerOnChangeListener(splitKeyboardGapPercentListener)
     }
 
     protected open fun reloadLayout() {
         removeAllViews()
         spaceKeys.clear()
         touchTarget.clear()
+        val splitLandscape = shouldUseSplitLandscapeLayout()
+        lastSplitLandscapeState = splitLandscape
         keyRows = keyLayout.map { row ->
             val keyViews = row.map(::createKeyView)
-            constraintLayout Row@{
-                var totalWidth = 0f
-                keyViews.forEachIndexed { index, view ->
-                    add(view, lParams {
-                        centerVertically()
-                        if (index == 0) {
-                            leftOfParent()
-                            horizontalChainStyle = LayoutParams.CHAIN_PACKED
-                        } else {
-                            leftToRightOf(keyViews[index - 1])
-                        }
-                        if (index == keyViews.size - 1) {
-                            rightOfParent()
-                            // for RTL
-                            horizontalChainStyle = LayoutParams.CHAIN_PACKED
-                        } else {
-                            rightToLeftOf(keyViews[index + 1])
-                        }
-                        val def = row[index]
-                        matchConstraintPercentWidth = def.appearance.percentWidth
-                    })
-                    row[index].appearance.percentWidth.let {
-                        // 0f means fill remaining space, thus does not need expanding
-                        totalWidth += if (it != 0f) it else 1f
-                    }
-                }
-                if (expandKeypressArea && totalWidth < 1f) {
-                    val free = (1f - totalWidth) / 2f
-                    keyViews.first().apply {
-                        updateLayoutParams<LayoutParams> {
-                            matchConstraintPercentWidth += free
-                        }
-                        layoutMarginLeft = free / (row.first().appearance.percentWidth + free)
-                    }
-                    keyViews.last().apply {
-                        updateLayoutParams<LayoutParams> {
-                            matchConstraintPercentWidth += free
-                        }
-                        layoutMarginRight = free / (row.last().appearance.percentWidth + free)
-                    }
-                }
+            if (splitLandscape) {
+                buildSplitRow(row, keyViews)
+            } else {
+                buildRegularRow(row, keyViews)
             }
         }
         keyRows.forEachIndexed { index, row ->
@@ -150,6 +142,220 @@ abstract class BaseKeyboard(
                 else above(keyRows[index + 1])
                 centerHorizontally()
             })
+        }
+    }
+
+    private fun shouldUseSplitLandscapeLayout(): Boolean {
+        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        return isLandscape && splitKeyboardLandscape.getValue()
+    }
+
+    private fun splitGapPercent(): Float {
+        return (splitKeyboardGapPercent.getValue().coerceIn(5, 60) / 100f)
+    }
+
+    private fun resolveRowWidths(row: List<KeyDef>): List<Float> {
+        if (row.isEmpty()) return emptyList()
+        val fixedSum = row.sumOf { def ->
+            val width = def.appearance.percentWidth
+            if (width > 0f) width.toDouble() else 0.0
+        }.toFloat()
+        val flexCount = row.count { it.appearance.percentWidth <= 0f }
+        val remaining = (1f - fixedSum).coerceAtLeast(0f)
+        val flexWidth = if (flexCount > 0) remaining / flexCount else 0f
+        val widths = row.map { def ->
+            val width = def.appearance.percentWidth
+            if (width > 0f) width else flexWidth
+        }
+        val sum = widths.sum()
+        return if (sum > 0f) {
+            widths.map { it / sum }
+        } else {
+            val equal = 1f / widths.size
+            widths.map { equal }
+        }
+    }
+
+    private fun chooseSplitIndex(row: List<KeyDef>, normalizedWidths: List<Float>): Int {
+        if (row.size <= 1) return 0
+        val candidates = (0 until row.lastIndex)
+        var prefix = 0f
+        var bestIndex = 0
+        var bestDistance = Float.MAX_VALUE
+        candidates.forEach { i ->
+            prefix += normalizedWidths[i]
+            val distance = kotlin.math.abs(prefix - 0.5f)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                bestIndex = i
+            }
+        }
+
+        val spaceIndex = row.indexOfFirst { it is SpaceKey || it is MiniSpaceKey }
+        if (spaceIndex in 1 until row.lastIndex) {
+            val aroundSpaceCandidates = listOf(spaceIndex - 1, spaceIndex)
+                .filter { it in 0 until row.lastIndex }
+            var running = 0f
+            val prefixByBoundary = HashMap<Int, Float>(row.size)
+            for (i in 0 until row.lastIndex) {
+                running += normalizedWidths[i]
+                prefixByBoundary[i] = running
+            }
+            aroundSpaceCandidates.forEach { index ->
+                val p = prefixByBoundary[index] ?: return@forEach
+                val d = kotlin.math.abs(p - 0.5f)
+                if (d <= bestDistance + 0.06f) {
+                    bestDistance = d
+                    bestIndex = index
+                }
+            }
+        }
+        return bestIndex
+    }
+
+    private fun buildSplitRow(row: List<KeyDef>, keyViews: List<KeyView>): ConstraintLayout = constraintLayout {
+        if (row.isEmpty()) return@constraintLayout
+        val gap = splitGapPercent()
+        val normalizedWidths = resolveRowWidths(row)
+        val splitIndex = chooseSplitIndex(row, normalizedWidths)
+        val sideCapacity = ((1f - gap) / 2f).coerceAtLeast(0.05f)
+
+        val leftIndices = 0..splitIndex
+        val rightIndices = (splitIndex + 1)..keyViews.lastIndex
+
+        fun adjustedSideWidths(indices: IntRange): Map<Int, Float> {
+            if (indices.isEmpty()) return emptyMap()
+            val base = indices.associateWith { normalizedWidths[it] }
+            val flexible = indices.filter { row[it].appearance.percentWidth <= 0f }
+            val fixed = indices.filter { row[it].appearance.percentWidth > 0f }
+
+            val fixedSum = fixed.sumOf { (base[it] ?: 0f).toDouble() }.toFloat()
+            val flexSum = flexible.sumOf { (base[it] ?: 0f).toDouble() }.toFloat()
+            val total = (fixedSum + flexSum).coerceAtLeast(0.0001f)
+
+            // Side without flexible keys: just scale proportionally to side capacity.
+            if (flexible.isEmpty()) {
+                val ratio = sideCapacity / total
+                return base.mapValues { (_, w) -> w * ratio }
+            }
+
+            // Keep at least part of side capacity for flexible keys (e.g. Space)
+            // to avoid "space key too tiny" when gap is large.
+            val minFlexShare = 0.30f
+            val targetFlex = maxOf(
+                sideCapacity * minFlexShare,
+                (sideCapacity - fixedSum).coerceAtLeast(0f)
+            ).coerceAtMost(sideCapacity)
+            val targetFixed = (sideCapacity - targetFlex).coerceAtLeast(0f)
+
+            val fixedScale = if (fixedSum > 0f) targetFixed / fixedSum else 0f
+            val result = mutableMapOf<Int, Float>()
+            fixed.forEach { idx ->
+                result[idx] = (base[idx] ?: 0f) * fixedScale
+            }
+            val flexScale = if (flexSum > 0f) targetFlex / flexSum else 0f
+            flexible.forEach { idx ->
+                result[idx] = (base[idx] ?: 0f) * flexScale
+            }
+            return result
+        }
+
+        val leftAdjusted = adjustedSideWidths(leftIndices)
+        val rightAdjusted = adjustedSideWidths(rightIndices)
+
+        val leftGuide = Guideline(context).apply {
+            id = View.generateViewId()
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                orientation = LayoutParams.VERTICAL
+                guidePercent = (0.5f - gap / 2f).coerceIn(0.2f, 0.8f)
+            }
+        }
+        val rightGuide = Guideline(context).apply {
+            id = View.generateViewId()
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                orientation = LayoutParams.VERTICAL
+                guidePercent = (0.5f + gap / 2f).coerceIn(0.2f, 0.8f)
+            }
+        }
+        addView(leftGuide)
+        addView(rightGuide)
+
+        keyViews.forEachIndexed { index, view ->
+            add(view, lParams {
+                centerVertically()
+                val isLeftGroup = index <= splitIndex
+                matchConstraintPercentWidth = if (isLeftGroup) {
+                    leftAdjusted[index] ?: 0f
+                } else {
+                    rightAdjusted[index] ?: 0f
+                }
+                if (isLeftGroup) {
+                    if (index == 0) {
+                        leftOfParent()
+                    } else {
+                        leftToRightOf(keyViews[index - 1])
+                    }
+                    if (index == splitIndex) {
+                        rightToLeft = leftGuide.id
+                    } else {
+                        rightToLeftOf(keyViews[index + 1])
+                    }
+                } else {
+                    if (index == splitIndex + 1) {
+                        leftToRight = rightGuide.id
+                    } else {
+                        leftToRightOf(keyViews[index - 1])
+                    }
+                    if (index == keyViews.lastIndex) {
+                        rightOfParent()
+                    } else {
+                        rightToLeftOf(keyViews[index + 1])
+                    }
+                }
+            })
+        }
+    }
+
+    private fun buildRegularRow(row: List<KeyDef>, keyViews: List<KeyView>): ConstraintLayout = constraintLayout Row@{
+        var totalWidth = 0f
+        keyViews.forEachIndexed { index, view ->
+            add(view, lParams {
+                centerVertically()
+                if (index == 0) {
+                    leftOfParent()
+                    horizontalChainStyle = LayoutParams.CHAIN_PACKED
+                } else {
+                    leftToRightOf(keyViews[index - 1])
+                }
+                if (index == keyViews.size - 1) {
+                    rightOfParent()
+                    // for RTL
+                    horizontalChainStyle = LayoutParams.CHAIN_PACKED
+                } else {
+                    rightToLeftOf(keyViews[index + 1])
+                }
+                val def = row[index]
+                matchConstraintPercentWidth = def.appearance.percentWidth
+            })
+            row[index].appearance.percentWidth.let {
+                // 0f means fill remaining space, thus does not need expanding
+                totalWidth += if (it != 0f) it else 1f
+            }
+        }
+        if (expandKeypressArea && totalWidth < 1f) {
+            val free = (1f - totalWidth) / 2f
+            keyViews.first().apply {
+                updateLayoutParams<LayoutParams> {
+                    matchConstraintPercentWidth += free
+                }
+                layoutMarginLeft = free / (row.first().appearance.percentWidth + free)
+            }
+            keyViews.last().apply {
+                updateLayoutParams<LayoutParams> {
+                    matchConstraintPercentWidth += free
+                }
+                layoutMarginRight = free / (row.last().appearance.percentWidth + free)
+            }
         }
     }
 
@@ -381,6 +587,12 @@ abstract class BaseKeyboard(
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        val currentSplit = shouldUseSplitLandscapeLayout()
+        if (currentSplit != lastSplitLandscapeState) {
+            reloadLayout()
+            reapplyTextScale()
+            requestLayout()
+        }
         val (x, y) = intArrayOf(0, 0).also { getLocationInWindow(it) }
         bounds.set(x, y, x + width, y + height)
     }

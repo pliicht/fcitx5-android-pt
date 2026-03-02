@@ -184,7 +184,7 @@ class InputView(
     }
 
     private fun clampFloatingPosition() {
-        if (!isFloating) return
+        if (!isEffectiveFloating) return
         val containerWidth = if (width > 0) width else resources.displayMetrics.widthPixels
         val containerHeight = if (height > 0) height else resources.displayMetrics.heightPixels
         val keyboardWidth = if (keyboardView.width > 0) keyboardView.width else resolveFloatingWidth()
@@ -252,7 +252,7 @@ class InputView(
         visibility = GONE
         // No initial translation needed
         setOnTouchListener { v, event ->
-            if (!isFloating) return@setOnTouchListener false
+            if (!isEffectiveFloating) return@setOnTouchListener false
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     floatingResizeStartHeight = resolveFloatingHeight()
@@ -375,6 +375,7 @@ class InputView(
     private val keyboardSidePaddingLandscape = keyboardPrefs.keyboardSidePaddingLandscape
     private val keyboardBottomPadding = keyboardPrefs.keyboardBottomPadding
     private val keyboardBottomPaddingLandscape = keyboardPrefs.keyboardBottomPaddingLandscape
+    private val splitKeyboardLandscape = keyboardPrefs.splitKeyboardLandscape
 
     private val keyboardSizePrefs = listOf(
         keyboardHeightPercent,
@@ -383,6 +384,7 @@ class InputView(
         keyboardSidePaddingLandscape,
         keyboardBottomPadding,
         keyboardBottomPaddingLandscape,
+        splitKeyboardLandscape,
     )
 
     var isFloating = false
@@ -398,7 +400,7 @@ class InputView(
             val width = view.width
             val height = view.height
             if (width <= 0 || height <= 0) return
-            val radius = if (isFloating) floatingCornerRadiusPx.toFloat() else 0f
+            val radius = if (isEffectiveFloating) floatingCornerRadiusPx.toFloat() else 0f
             outline.setRoundRect(0, 0, width, height, radius)
         }
     }
@@ -414,6 +416,9 @@ class InputView(
 
     private val isLandscapeOrientation: Boolean
         get() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    private val isEffectiveFloating: Boolean
+        get() = isFloating
 
     private fun getStoredFloatingPosition(): Pair<Int, Int> {
         return if (isLandscapeOrientation) {
@@ -445,7 +450,7 @@ class InputView(
         get() = resources.displayMetrics.widthPixels.coerceAtLeast(minFloatingWidthPx)
 
     private val minFloatingHeightPx: Int
-        get() = dp(180).coerceAtMost(resources.displayMetrics.heightPixels)
+        get() = dp(100).coerceAtMost(resources.displayMetrics.heightPixels)
 
     private val maxFloatingHeightPx: Int
         get() = (resources.displayMetrics.heightPixels - dp(80)).coerceAtLeast(minFloatingHeightPx)
@@ -494,10 +499,19 @@ class InputView(
     }
 
     private fun updateFloatingHandlesVisibility() {
-        val visibilityTarget = if (isFloating) VISIBLE else GONE
-        floatingRightHandle.visibility = visibilityTarget
-        floatingBottomHandle.visibility = visibilityTarget
-        floatingMoveHandle.visibility = visibilityTarget
+        if (isFloating) {
+            floatingRightHandle.visibility = VISIBLE
+            floatingBottomHandle.visibility = VISIBLE
+            floatingMoveHandle.visibility = VISIBLE
+            return
+        }
+        floatingRightHandle.visibility = GONE
+        floatingBottomHandle.visibility = GONE
+        floatingMoveHandle.visibility = GONE
+    }
+
+    private fun updateSplitBackgroundVisibility() {
+        customBackground.visibility = VISIBLE
     }
 
     private fun toggleFloatingMode() {
@@ -509,7 +523,7 @@ class InputView(
             )
         }
         isFloating = !isFloating
-        kawaiiBar.setFloatingState(isFloating)
+        kawaiiBar.setFloatingState(isEffectiveFloating)
         updateFloatingState()
         updateFloatingHandlesVisibility()
         updateKeyboardSize() // Add this to refresh padding/height based on new state
@@ -521,7 +535,7 @@ class InputView(
     }
 
     fun getFloatingKeyboardRegion(outRegion: Region) {
-        if (!isFloating) return
+        if (!isEffectiveFloating) return
         val rect = Rect()
 
         keyboardView.getHitRect(rect)
@@ -557,7 +571,7 @@ class InputView(
 
     private fun updateFloatingState() {
         val params = keyboardView.layoutParams as ConstraintLayout.LayoutParams
-        if (isFloating) {
+        if (isEffectiveFloating) {
             // Floating mode
             params.width = resolveFloatingWidth()
             params.bottomToBottom = params.unset
@@ -633,6 +647,7 @@ class InputView(
             (windowManager.getEssentialWindow(KeyboardWindow) as? KeyboardWindow)?.setTextScale(1.0f)
         }
         keyboardView.layoutParams = params
+        updateSplitBackgroundVisibility()
         // Request layout to apply changes to self and children
         keyboardView.invalidateOutline()
         requestLayout()
@@ -680,7 +695,11 @@ class InputView(
     @Keep
     private val onKeyboardSizeChangeListener = ManagedPreferenceProvider.OnChangeListener { key ->
         if (keyboardSizePrefs.any { it.key == key }) {
+            updateFloatingState()
+            updateFloatingHandlesVisibility()
+            kawaiiBar.setFloatingState(isEffectiveFloating)
             updateKeyboardSize()
+            service.updateFullscreenMode()
         }
     }
 
@@ -782,8 +801,10 @@ class InputView(
             centerHorizontally()
         })
         keyboardPrefs.registerOnChangeListener(onKeyboardSizeChangeListener)
+        updateFloatingState()
         updateFloatingHandlesVisibility()
-        kawaiiBar.setFloatingState(isFloating)
+        updateSplitBackgroundVisibility()
+        kawaiiBar.setFloatingState(isEffectiveFloating)
 
         kawaiiBar.onFloatingToggleListener = {
             toggleFloatingMode()
@@ -832,7 +853,11 @@ class InputView(
     }
 
     private fun updateKeyboardSize() {
-        val targetHeight = if (isFloating) resolveFloatingHeight() else keyboardHeightPx
+        val targetHeight = if (isFloating) {
+            resolveFloatingHeight()
+        } else {
+            keyboardHeightPx
+        }
         windowManager.view.updateLayoutParams {
             height = targetHeight
         }

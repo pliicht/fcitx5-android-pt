@@ -240,6 +240,23 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             keyboardBottomPaddingLandscape = secondary
         }
 
+        val splitKeyboardLandscape = switch(
+            R.string.split_keyboard_landscape,
+            "split_keyboard_landscape",
+            false
+        )
+
+        val splitKeyboardGapPercent = int(
+            R.string.split_keyboard_gap_percent,
+            "split_keyboard_gap_percent",
+            20,
+            5,
+            60,
+            "%"
+        ) {
+            splitKeyboardLandscape.getValue()
+        }
+
         val horizontalCandidateStyle = enumList(
             R.string.horizontal_candidate_style,
             "horizontal_candidate_style",

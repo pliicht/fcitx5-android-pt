@@ -217,6 +217,105 @@ abstract class BaseKeyboard(
         if (row.isEmpty()) return@constraintLayout
         val gap = splitGapPercent()
         val normalizedWidths = resolveRowWidths(row)
+
+        val bridgeIndex = row.indexOfFirst { it is SpaceKey || it is MiniSpaceKey }
+            .takeIf { it in 1 until row.lastIndex }
+        if (bridgeIndex != null) {
+            val minSideReach = 0.06f
+            val bridgeMinWidth = (gap + minSideReach * 2f).coerceAtMost(0.75f)
+            val bridgeMaxWidth = 0.75f
+            val splitScale = (1f - gap).coerceIn(0.40f, 0.95f)
+
+            val leftIndices = 0 until bridgeIndex
+            val rightIndices = (bridgeIndex + 1)..keyViews.lastIndex
+
+            val nonBridgeIndices = row.indices.filter { it != bridgeIndex }
+            val preferredNormalWidths = nonBridgeIndices.mapNotNull { index ->
+                val width = row[index].appearance.percentWidth
+                if (width > 0f && row[index] !is SpaceKey && row[index] !is MiniSpaceKey) width else null
+            }
+            val fallbackWidths = nonBridgeIndices.mapNotNull { index ->
+                val width = row[index].appearance.percentWidth
+                if (width > 0f) width else null
+            }
+            val referenceNormalWidth = when {
+                preferredNormalWidths.isNotEmpty() -> preferredNormalWidths.sum() / preferredNormalWidths.size
+                fallbackWidths.isNotEmpty() -> fallbackWidths.sum() / fallbackWidths.size
+                else -> 1f / row.size.coerceAtLeast(1)
+            }
+
+            val desiredNonBridgeWidths = mutableMapOf<Int, Float>()
+            nonBridgeIndices.forEach { index ->
+                val width = row[index].appearance.percentWidth
+                val baseWidth = if (width > 0f) width else referenceNormalWidth
+                desiredNonBridgeWidths[index] = baseWidth * splitScale
+            }
+
+            val assignedNonBridgeWidths = desiredNonBridgeWidths.toMutableMap()
+            fun sumAssigned(): Float = assignedNonBridgeWidths.values.sum().coerceIn(0f, 1f)
+
+            val flexIndices = nonBridgeIndices.filter { row[it].appearance.percentWidth <= 0f }
+            val fixedIndices = nonBridgeIndices.filter { row[it].appearance.percentWidth > 0f }
+
+            var overflowForMinBridge = (sumAssigned() + bridgeMinWidth - 1f).coerceAtLeast(0f)
+            if (overflowForMinBridge > 0f && flexIndices.isNotEmpty()) {
+                val flexSum = flexIndices.sumOf { (assignedNonBridgeWidths[it] ?: 0f).toDouble() }.toFloat()
+                if (flexSum > 0f) {
+                    val reduce = overflowForMinBridge.coerceAtMost(flexSum)
+                    flexIndices.forEach { index ->
+                        val current = assignedNonBridgeWidths[index] ?: 0f
+                        assignedNonBridgeWidths[index] = current - reduce * (current / flexSum)
+                    }
+                    overflowForMinBridge = (sumAssigned() + bridgeMinWidth - 1f).coerceAtLeast(0f)
+                }
+            }
+            if (overflowForMinBridge > 0f && fixedIndices.isNotEmpty()) {
+                val fixedSum = fixedIndices.sumOf { (assignedNonBridgeWidths[it] ?: 0f).toDouble() }.toFloat()
+                if (fixedSum > 0f) {
+                    fixedIndices.forEach { index ->
+                        val current = assignedNonBridgeWidths[index] ?: 0f
+                        assignedNonBridgeWidths[index] = current - overflowForMinBridge * (current / fixedSum)
+                    }
+                }
+            }
+
+            var bridgeWidth = (1f - sumAssigned()).coerceAtLeast(bridgeMinWidth)
+            if (bridgeWidth > bridgeMaxWidth) {
+                val extra = bridgeWidth - bridgeMaxWidth
+                val growTargets = if (flexIndices.isNotEmpty()) flexIndices else fixedIndices
+                val targetSum = growTargets.sumOf { (assignedNonBridgeWidths[it] ?: 0f).toDouble() }.toFloat()
+                if (targetSum > 0f) {
+                    growTargets.forEach { index ->
+                        val current = assignedNonBridgeWidths[index] ?: 0f
+                        assignedNonBridgeWidths[index] = current + extra * (current / targetSum)
+                    }
+                }
+                bridgeWidth = bridgeMaxWidth
+            }
+
+            keyViews.forEachIndexed { index, view ->
+                add(view, lParams {
+                    centerVertically()
+                    matchConstraintPercentWidth = if (index == bridgeIndex) {
+                        bridgeWidth
+                    } else {
+                        assignedNonBridgeWidths[index] ?: 0f
+                    }
+                    if (index == 0) {
+                        leftOfParent()
+                    } else {
+                        leftToRightOf(keyViews[index - 1])
+                    }
+                    if (index == keyViews.lastIndex) {
+                        rightOfParent()
+                    } else {
+                        rightToLeftOf(keyViews[index + 1])
+                    }
+                })
+            }
+            return@constraintLayout
+        }
+
         val splitIndex = chooseSplitIndex(row, normalizedWidths)
         val sideCapacity = ((1f - gap) / 2f).coerceAtLeast(0.05f)
 

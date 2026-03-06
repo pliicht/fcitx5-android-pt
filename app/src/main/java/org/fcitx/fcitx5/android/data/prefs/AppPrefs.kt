@@ -41,6 +41,8 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val floatingKeyboardYPortrait = int("floating_keyboard_y_portrait", -1)
         val floatingKeyboardXLandscape = int("floating_keyboard_x_landscape", -1)
         val floatingKeyboardYLandscape = int("floating_keyboard_y_landscape", -1)
+        val oneHandOnRightPortrait = bool("one_hand_on_right_portrait", true)
+        val oneHandOnRightLandscape = bool("one_hand_on_right_landscape", true)
     }
 
     inner class Advanced : ManagedPreferenceCategory(R.string.advanced, sharedPreferences) {
@@ -429,7 +431,9 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
                 internal.floatingKeyboardXPortrait,
                 internal.floatingKeyboardYPortrait,
                 internal.floatingKeyboardXLandscape,
-                internal.floatingKeyboardYLandscape
+                internal.floatingKeyboardYLandscape,
+                internal.oneHandOnRightPortrait,
+                internal.oneHandOnRightLandscape
             ).forEach {
                 it.putValueTo(this@edit)
             }

@@ -244,7 +244,19 @@ class TextKeyboard(
     }
 
     private var punctuationMapping: Map<String, String> = mapOf()
+    private var lastLayoutSignature: String? = null
     private fun transformPunctuation(p: String) = punctuationMapping.getOrDefault(p, p)
+
+    private fun layoutSignature(ime: InputMethodEntry): String {
+        val map = textLayoutJsonMap
+        val layoutSource = when {
+            map?.containsKey(ime.uniqueName) == true -> "u:${ime.uniqueName}"
+            map?.containsKey(ime.displayName) == true -> "d:${ime.displayName}"
+            else -> "default"
+        }
+        val subModeLabel = ime.subMode.run { label.ifEmpty { name.ifEmpty { "" } } }
+        return "$layoutSource|$subModeLabel|$lastModified"
+    }
 
     override fun onAction(action: KeyAction, source: KeyActionListener.Source) {
         var transformed = action
@@ -303,18 +315,34 @@ class TextKeyboard(
         updatePunctuationKeys()
     }
 
-    override fun onInputMethodUpdate(ime: InputMethodEntry) {
-        // update ime of companion object ime
-        TextKeyboard.ime = ime
-        reloadLayout()
-        updateAlphabetKeys()
+    private fun updateSpaceLabel(ime: InputMethodEntry?) {
+        if (ime == null) return
         space?.mainText?.text = buildString {
             append(ime.displayName)
             ime.subMode.run { label.ifEmpty { name.ifEmpty { null } } }?.let { append(" ($it)") }
         }
+    }
+
+    override fun onInputMethodUpdate(ime: InputMethodEntry) {
+        // update ime of companion object ime
+        TextKeyboard.ime = ime
+        val signature = layoutSignature(ime)
+        if (signature != lastLayoutSignature) {
+            reloadLayout()
+            lastLayoutSignature = signature
+        }
+        updateAlphabetKeys()
+        updateSpaceLabel(ime)
         if (capsState != CapsState.None) {
             switchCapsState()
         }
+    }
+
+    override fun onStyleRefreshFinished() {
+        updateCapsButtonIcon()
+        updateAlphabetKeys()
+        updatePunctuationKeys()
+        updateSpaceLabel(TextKeyboard.ime)
     }
 
     private fun transformPopupPreview(c: String): String {

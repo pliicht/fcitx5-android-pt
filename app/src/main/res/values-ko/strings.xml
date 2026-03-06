@@ -56,6 +56,7 @@
     <string name="clipboard">클립보드</string>
     <string name="keyboard_height">키보드 높이</string>
     <string name="virtual_keyboard">키보드</string>
+    <string name="one_handed_keyboard">한손 키보드</string>
     <string name="version">버전</string>
     <string name="build_time">빌드 시간</string>
     <string name="build_git_hash">Git 해시 빌드</string>

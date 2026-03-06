@@ -111,6 +111,7 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
             it.keyActionListener = keyActionListener
             it.popupActionListener = popupActionListener
             keyboardView.apply { add(it, lParams(matchParent, matchParent)) }
+            it.refreshStyle()
             it.setTextScale(currentTextScale)
             it.onAttach()
             it.onReturnDrawableUpdate(returnKeyDrawable.resourceId)
@@ -193,5 +194,10 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
     fun setTextScale(scale: Float) {
         currentTextScale = scale
         keyboards.values.forEach { it.setTextScale(scale) }
+    }
+
+    fun setHorizontalGapScale(scale: Float) {
+        val target = scale.coerceIn(0.5f, 1f)
+        currentKeyboard?.setHorizontalGapScale(target)
     }
 }

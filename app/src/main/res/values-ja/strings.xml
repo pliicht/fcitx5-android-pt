@@ -62,6 +62,7 @@
     <string name="clipboard">クリップボード</string>
     <string name="keyboard_height">キーボードの高さ</string>
     <string name="virtual_keyboard">ソフトウェアキーボード</string>
+    <string name="one_handed_keyboard">片手キーボード</string>
     <string name="clipboard_suggestion_timeout">クリップボード候補のタイムアウト</string>
     <string name="version">バージョン</string>
     <string name="build_time">ビルド時間</string>

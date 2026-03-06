@@ -616,28 +616,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             // In fixed mode, use TOUCHABLE_INSETS_REGION to explicitly define touchable area
             // to avoid any ambiguity about full screen blocking.
             outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
-            val rect = Rect()
-            inputView?.keyboardView?.getGlobalVisibleRect(rect)
-            
-            // Convert to window coords
-            val windowLoc = IntArray(2)
-            inputView?.getLocationInWindow(windowLoc)
-            // Global rect is screen coords.
-            // We want window coords.
-            // If window is full screen, screen coords ~= window coords (minus system bars if not fullscreen).
-            // But usually getLocationInWindow gives us what we want relative to window (0,0).
-            
-            // Let's rely on view dimensions and location in window.
-            rect.set(0, 0, inputView?.keyboardView?.width ?: 0, inputView?.keyboardView?.height ?: 0)
-            rect.offset(location[0], location[1])
-            
-            // If we have candidates view (usually inside inputView but above keyboardView?), 
-            // we should include it.
-            // But for now let's just make keyboard touchable. 
-            // The "covers app" complaint suggests too much is touchable.
-            // So restricting to keyboardView is safer.
-            
-            outInsets.touchableRegion.set(rect)
+              inputView?.getDockedKeyboardRegion(outInsets.touchableRegion)
             
             // Also set contentTopInsets to where the keyboard starts
             if (top > 0) {
@@ -665,6 +644,14 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     override fun onEvaluateInputViewShown() = true
 
     fun superEvaluateInputViewShown() = super.onEvaluateInputViewShown()
+
+    fun toggleOneHandKeyboard() {
+        inputView?.toggleOneHandMode()
+    }
+
+    fun isOneHandKeyboardEnabled(): Boolean {
+        return inputView?.isOneHanded == true
+    }
 
     // override fun onEvaluateFullscreenMode() = false // Removed duplicate
 

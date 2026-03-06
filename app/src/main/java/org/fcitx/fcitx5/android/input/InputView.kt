@@ -12,7 +12,9 @@ import android.graphics.drawable.LayerDrawable
 import androidx.core.content.ContextCompat
 import android.graphics.Outline
 import android.os.Build
+import android.os.SystemClock
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.WindowInsets
@@ -329,6 +331,158 @@ class InputView(
         }
     }
 
+    private fun updateOneHandHandleAppearance() {
+        val background = createHandleDrawable(dp(10).toFloat())
+        val iconRes = if (oneHandOnRight) {
+            R.drawable.ic_baseline_keyboard_arrow_left_24
+        } else {
+            R.drawable.ic_baseline_keyboard_arrow_right_24
+        }
+        val icon = ContextCompat.getDrawable(context, iconRes)?.mutate()
+        if (icon == null) {
+            oneHandHandle.background = background
+            return
+        }
+        icon.setTint(theme.keyTextColor)
+        val inset = dp(4)
+        val drawable = LayerDrawable(arrayOf(background, icon)).apply {
+            setLayerInset(1, inset, inset, inset, inset)
+        }
+        oneHandHandle.background = drawable
+    }
+
+    private fun updateOneHandHandlePosition() {
+        val safeGap = dp(6)
+        oneHandHandle.updateLayoutParams<ConstraintLayout.LayoutParams> {
+            topToTop = windowManager.view.id
+            bottomToBottom = windowManager.view.id
+            if (oneHandOnRight) {
+                startToStart = unset
+                endToEnd = unset
+                startToEnd = unset
+                endToStartOf(windowManager.view)
+                marginStart = 0
+                marginEnd = safeGap
+            } else {
+                startToStart = unset
+                endToEnd = unset
+                endToStart = unset
+                startToEndOf(windowManager.view)
+                marginStart = safeGap
+                marginEnd = 0
+            }
+        }
+    }
+
+    private fun updateOneHandHandleVisibility() {
+        oneHandHandle.visibility = if (isOneHanded && !isFloating) VISIBLE else GONE
+    }
+
+    private fun syncOneHandHandleUi(bringToFront: Boolean = false) {
+        updateOneHandHandleAppearance()
+        updateOneHandHandlePosition()
+        updateOneHandHandleVisibility()
+        if (bringToFront) {
+            oneHandHandle.bringToFront()
+        }
+    }
+
+    private fun syncKeyboardBoundsAfterLayout() {
+        keyboardWindow.updateBounds()
+        keyboardView.post {
+            keyboardWindow.updateBounds()
+            keyboardView.post {
+                keyboardWindow.updateBounds()
+            }
+        }
+    }
+
+    private fun switchOneHandSide() {
+        oneHandOnRight = !oneHandOnRight
+        saveOneHandSide(oneHandOnRight)
+        if (!isOneHanded || isFloating) return
+        updateKeyboardSize()
+        syncOneHandHandleUi(bringToFront = true)
+        syncKeyboardBoundsAfterLayout()
+        requestLayout()
+    }
+
+    private fun applyOneHandWidth() {
+        if (!isOneHanded || isFloating) return
+        updateKeyboardSize()
+        updateOneHandHandlePosition()
+        syncKeyboardBoundsAfterLayout()
+        keyboardView.invalidateOutline()
+        requestLayout()
+    }
+
+    private fun updateOneHandGapScale(force: Boolean = false) {
+        val now = SystemClock.uptimeMillis()
+        if (!force && now - lastOneHandGapRefreshAt < oneHandGapRefreshIntervalMs) {
+            return
+        }
+        lastOneHandGapRefreshAt = now
+        val keyboard = windowManager.getEssentialWindow(KeyboardWindow) as? KeyboardWindow ?: return
+        if (!isOneHanded || isFloating) {
+            keyboard.setHorizontalGapScale(1f)
+            return
+        }
+        val containerWidth = keyboardView.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val scale = resolveOneHandWidth().toFloat() / containerWidth.toFloat()
+        keyboard.setHorizontalGapScale(scale)
+    }
+
+    private val oneHandHandle = view(::View) {
+        visibility = GONE
+        setOnClickListener {
+            if (!isOneHanded || isFloating) return@setOnClickListener
+            switchOneHandSide()
+        }
+        setOnTouchListener { v, event ->
+            if (!isOneHanded || isFloating) return@setOnTouchListener false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    oneHandResizeStartWidth = resolveOneHandWidth()
+                    lastOneHandTouchX = event.rawX
+                    oneHandDragging = false
+                    lastOneHandGapRefreshAt = 0L
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                    v.isPressed = true
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val delta = event.rawX - lastOneHandTouchX
+                    if (!oneHandDragging && kotlin.math.abs(delta) > oneHandTouchSlop) {
+                        oneHandDragging = true
+                    }
+                    if (oneHandDragging) {
+                        val target = if (oneHandOnRight) {
+                            oneHandResizeStartWidth - delta.toInt()
+                        } else {
+                            oneHandResizeStartWidth + delta.toInt()
+                        }
+                        oneHandWidthPx = target.coerceIn(minOneHandWidthPx, maxOneHandWidthPx)
+                        applyOneHandWidth()
+                        updateOneHandGapScale()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                    v.isPressed = false
+                    if (!oneHandDragging && event.actionMasked == MotionEvent.ACTION_UP) {
+                        v.performClick()
+                    } else if (oneHandDragging) {
+                        updateOneHandGapScale(force = true)
+                    }
+                    oneHandDragging = false
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
     private val scope = DynamicScope()
     private val themedContext = context.withTheme(R.style.Theme_InputViewTheme)
     private val broadcaster = InputBroadcaster()
@@ -389,8 +543,20 @@ class InputView(
 
     var isFloating = false
         private set
+    var isOneHanded = false
+        private set
+
+    private var oneHandOnRight = true
+    private var oneHandWidthPx = 0
     private var lastTouchX = 0f
     private var lastTouchY = 0f
+
+    private var oneHandResizeStartWidth = 0
+    private var lastOneHandTouchX = 0f
+    private var oneHandDragging = false
+    private var lastOneHandGapRefreshAt = 0L
+    private val oneHandGapRefreshIntervalMs = 80L
+    private val oneHandTouchSlop by lazy { ViewConfiguration.get(context).scaledTouchSlop }
 
     private val floatingCornerRadiusPx: Int
         get() = dp(10)
@@ -413,6 +579,8 @@ class InputView(
     private var floatingYPortrait by internalPrefs.floatingKeyboardYPortrait
     private var floatingXLandscape by internalPrefs.floatingKeyboardXLandscape
     private var floatingYLandscape by internalPrefs.floatingKeyboardYLandscape
+    private var oneHandOnRightPortrait by internalPrefs.oneHandOnRightPortrait
+    private var oneHandOnRightLandscape by internalPrefs.oneHandOnRightLandscape
 
     private val isLandscapeOrientation: Boolean
         get() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -437,6 +605,35 @@ class InputView(
             floatingYPortrait = y
         }
     }
+
+    private fun getStoredOneHandSide(): Boolean {
+        return if (isLandscapeOrientation) {
+            oneHandOnRightLandscape
+        } else {
+            oneHandOnRightPortrait
+        }
+    }
+
+    private fun saveOneHandSide(onRight: Boolean) {
+        if (isLandscapeOrientation) {
+            oneHandOnRightLandscape = onRight
+        } else {
+            oneHandOnRightPortrait = onRight
+        }
+    }
+
+    private fun applyStoredOneHandSideIfNeeded(forceRefresh: Boolean = false) {
+        val stored = getStoredOneHandSide()
+        if (!forceRefresh && stored == oneHandOnRight) return
+        oneHandOnRight = stored
+        if (isOneHanded && !isFloating) {
+            updateKeyboardSize()
+            syncOneHandHandleUi(bringToFront = true)
+            syncKeyboardBoundsAfterLayout()
+        } else {
+            syncOneHandHandleUi()
+        }
+    }
     
     private var floatingResizeStartWidth = 0
     private var floatingResizeStartHeight = 0
@@ -454,6 +651,22 @@ class InputView(
 
     private val maxFloatingHeightPx: Int
         get() = (resources.displayMetrics.heightPixels - dp(80)).coerceAtLeast(minFloatingHeightPx)
+
+    private val minOneHandWidthPx: Int
+        get() = dp(180).coerceAtMost(resources.displayMetrics.widthPixels)
+
+    private val maxOneHandWidthPx: Int
+        get() = resources.displayMetrics.widthPixels.coerceAtLeast(minOneHandWidthPx)
+
+    private fun resolveOneHandWidth(): Int {
+        val stored = oneHandWidthPx.takeIf { it > 0 } ?: run {
+            val default = (resources.displayMetrics.widthPixels * 0.8f).toInt()
+            oneHandWidthPx = default.coerceIn(minOneHandWidthPx, maxOneHandWidthPx)
+            oneHandWidthPx
+        }
+        oneHandWidthPx = stored.coerceIn(minOneHandWidthPx, maxOneHandWidthPx)
+        return oneHandWidthPx
+    }
 
     private fun resolveFloatingWidth(): Int {
         val stored = floatingWidthPx.takeIf { it > 0 } ?: run {
@@ -514,6 +727,39 @@ class InputView(
         customBackground.visibility = VISIBLE
     }
 
+    private fun applyDockedKeyboardState() {
+        val params = keyboardView.layoutParams as ConstraintLayout.LayoutParams
+        params.matchConstraintMaxWidth = params.unset
+        params.matchConstraintMinWidth = params.unset
+        params.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
+        params.topToTop = params.unset
+        params.width = matchParent
+        params.startToEnd = params.unset
+        params.endToStart = params.unset
+        params.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+        params.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+        keyboardView.layoutParams = params
+        keyboardView.translationX = 0f
+        keyboardView.translationY = 0f
+
+        preedit.ui.root.updateLayoutParams<ConstraintLayout.LayoutParams> {
+            width = matchParent
+            startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+            endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+            bottomToTop = keyboardView.id
+            topToBottom = unset
+            topToTop = unset
+            bottomToBottom = unset
+        }
+        preedit.ui.root.translationX = 0f
+        preedit.ui.root.translationY = 0f
+
+        syncOneHandHandleUi()
+        syncKeyboardBoundsAfterLayout()
+        keyboardView.invalidateOutline()
+        requestLayout()
+    }
+
     private fun toggleFloatingMode() {
         popup.dismissAll()
         if (isFloating) {
@@ -522,15 +768,47 @@ class InputView(
                 keyboardView.translationY.toInt()
             )
         }
+        if (!isFloating && isOneHanded) {
+            isOneHanded = false
+        }
         isFloating = !isFloating
         kawaiiBar.setFloatingState(isEffectiveFloating)
         updateFloatingState()
         updateFloatingHandlesVisibility()
+        updateOneHandHandleVisibility()
         updateKeyboardSize() // Add this to refresh padding/height based on new state
+        updateOneHandGapScale(force = true)
         service.updateFullscreenMode()
         // Force layout update
         requestLayout()
         // Trigger insets update
+        service.window.window?.decorView?.requestLayout()
+    }
+
+    fun toggleOneHandMode() {
+        popup.dismissAll()
+        if (isFloating) {
+            saveFloatingPosition(
+                keyboardView.translationX.toInt(),
+                keyboardView.translationY.toInt()
+            )
+            isFloating = false
+            kawaiiBar.setFloatingState(false)
+        }
+        isOneHanded = !isOneHanded
+        if (isOneHanded) {
+            resolveOneHandWidth()
+        }
+        updateFloatingState()
+        updateFloatingHandlesVisibility()
+        updateOneHandHandleVisibility()
+        updateKeyboardSize()
+        updateOneHandGapScale(force = true)
+        if (isOneHanded) {
+            syncKeyboardBoundsAfterLayout()
+        }
+        service.updateFullscreenMode()
+        requestLayout()
         service.window.window?.decorView?.requestLayout()
     }
 
@@ -565,6 +843,31 @@ class InputView(
         }
 
         // No extra inset needed now as handles provide padding and coverage
+
+        outRegion.set(rect)
+    }
+
+    fun getDockedKeyboardRegion(outRegion: Region) {
+        val keyboardLocation = IntArray(2)
+        keyboardView.getLocationInWindow(keyboardLocation)
+        val rect = Rect(
+            keyboardLocation[0],
+            keyboardLocation[1],
+            keyboardLocation[0] + keyboardView.width,
+            keyboardLocation[1] + keyboardView.height
+        )
+
+        if (oneHandHandle.visibility == View.VISIBLE) {
+            val handleLocation = IntArray(2)
+            oneHandHandle.getLocationInWindow(handleLocation)
+            val handleRect = Rect(
+                handleLocation[0],
+                handleLocation[1],
+                handleLocation[0] + oneHandHandle.width,
+                handleLocation[1] + oneHandHandle.height
+            )
+            rect.union(handleRect)
+        }
 
         outRegion.set(rect)
     }
@@ -622,31 +925,13 @@ class InputView(
 
         } else {
             // Docked mode
-            params.width = matchParent
-            params.matchConstraintMaxWidth = params.unset // Reset constraint limits
-            params.matchConstraintMinWidth = params.unset
-            params.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
-            params.topToTop = params.unset
-            params.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
-            params.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
-            // Reset InputView height to match parent to ensure bottom alignment
             layoutParams?.height = matchParent
-            keyboardView.translationX = 0f
-            keyboardView.translationY = 0f
-            // Reset preedit constraints for docked mode
-            preedit.ui.root.updateLayoutParams<ConstraintLayout.LayoutParams> {
-                width = matchParent
-                startToStart = ConstraintLayout.LayoutParams.PARENT_ID
-                endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
-                bottomToTop = keyboardView.id
-                // Ensure translation is reset
-            }
-            preedit.ui.root.translationX = 0f
-            preedit.ui.root.translationY = 0f
+            applyDockedKeyboardState()
             // Reset text scale
             (windowManager.getEssentialWindow(KeyboardWindow) as? KeyboardWindow)?.setTextScale(1.0f)
         }
         keyboardView.layoutParams = params
+        updateOneHandHandleVisibility()
         updateSplitBackgroundVisibility()
         // Request layout to apply changes to self and children
         keyboardView.invalidateOutline()
@@ -697,6 +982,7 @@ class InputView(
         if (keyboardSizePrefs.any { it.key == key }) {
             updateFloatingState()
             updateFloatingHandlesVisibility()
+            updateOneHandHandleVisibility()
             kawaiiBar.setFloatingState(isEffectiveFloating)
             updateKeyboardSize()
             service.updateFullscreenMode()
@@ -710,6 +996,8 @@ class InputView(
     }
 
     init {
+        oneHandOnRight = getStoredOneHandSide()
+
         // MUST call before any operation
         setupScope()
 
@@ -729,6 +1017,9 @@ class InputView(
         broadcaster.onImeUpdate(fcitx.runImmediately { inputMethodEntryCached })
 
         customBackground.imageDrawable = theme.backgroundDrawable(keyBorder)
+        if (windowManager.view.id == View.NO_ID) {
+            windowManager.view.id = View.generateViewId()
+        }
 
         keyboardView = constraintLayout {
             id = View.generateViewId()
@@ -760,6 +1051,10 @@ class InputView(
                 /**
                  * set start and end constrain in [updateKeyboardSize]
                  */
+            })
+            add(oneHandHandle, lParams(dp(16), dp(44)) {
+                topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+                startToStart = ConstraintLayout.LayoutParams.PARENT_ID
             })
             add(bottomPaddingSpace, lParams {
                 startToEndOf(leftPaddingSpace)
@@ -803,6 +1098,7 @@ class InputView(
         keyboardPrefs.registerOnChangeListener(onKeyboardSizeChangeListener)
         updateFloatingState()
         updateFloatingHandlesVisibility()
+        updateOneHandHandleVisibility()
         updateSplitBackgroundVisibility()
         kawaiiBar.setFloatingState(isEffectiveFloating)
 
@@ -853,6 +1149,8 @@ class InputView(
     }
 
     private fun updateKeyboardSize() {
+        applyStoredOneHandSideIfNeeded()
+
         val targetHeight = if (isFloating) {
             resolveFloatingHeight()
         } else {
@@ -863,6 +1161,42 @@ class InputView(
         }
         bottomPaddingSpace.updateLayoutParams {
             height = keyboardBottomPaddingPx
+        }
+        if (isOneHanded && !isFloating) {
+            val containerWidth = keyboardView.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+            val oneHandWidth = resolveOneHandWidth().coerceAtMost(containerWidth)
+            val remaining = (containerWidth - oneHandWidth).coerceAtLeast(0)
+
+            leftPaddingSpace.visibility = VISIBLE
+            rightPaddingSpace.visibility = VISIBLE
+            if (oneHandOnRight) {
+                leftPaddingSpace.updateLayoutParams {
+                    width = remaining
+                }
+                rightPaddingSpace.updateLayoutParams {
+                    width = 0
+                }
+            } else {
+                leftPaddingSpace.updateLayoutParams {
+                    width = 0
+                }
+                rightPaddingSpace.updateLayoutParams {
+                    width = remaining
+                }
+            }
+
+            windowManager.view.updateLayoutParams<LayoutParams> {
+                startToStart = unset
+                endToEnd = unset
+                startToEndOf(leftPaddingSpace)
+                endToStartOf(rightPaddingSpace)
+            }
+            preedit.ui.root.setPadding(0, 0, 0, 0)
+            kawaiiBar.view.setPadding(0, 0, 0, 0)
+            syncOneHandHandleUi()
+            updateHandlePosition()
+            syncKeyboardBoundsAfterLayout()
+            return
         }
         val sidePadding = keyboardSidePaddingPx
         if (sidePadding == 0) {
@@ -898,6 +1232,8 @@ class InputView(
                 clampFloatingPosition()
                 updateHandlePosition()
             }
+        } else if (isOneHanded) {
+            syncOneHandHandleUi()
         }
         // Sync handles when size changes
         updateHandlePosition()

@@ -86,6 +86,7 @@ abstract class BaseKeyboard(
 
     private val bounds = Rect()
     private lateinit var keyRows: List<ConstraintLayout>
+    private var horizontalGapScale = 1f
 
     private var lastSplitLandscapeState = false
 
@@ -480,12 +481,31 @@ abstract class BaseKeyboard(
         setTextScale(currentTextScale)
     }
 
+    fun refreshStyle() {
+        reloadLayout()
+        reapplyTextScale()
+        onStyleRefreshFinished()
+        requestLayout()
+        updateBounds()
+    }
+
+    fun setHorizontalGapScale(scale: Float) {
+        val target = scale.coerceIn(0.5f, 1f)
+        if (kotlin.math.abs(horizontalGapScale - target) < 0.01f) return
+        horizontalGapScale = target
+        refreshStyle()
+    }
+
+    protected open fun onStyleRefreshFinished() {
+        // do nothing by default
+    }
+
     private fun createKeyView(def: KeyDef): KeyView {
         return when (def.appearance) {
-            is KeyDef.Appearance.AltText -> AltTextKeyView(context, theme, def.appearance)
-            is KeyDef.Appearance.ImageText -> ImageTextKeyView(context, theme, def.appearance)
-            is KeyDef.Appearance.Text -> TextKeyView(context, theme, def.appearance)
-            is KeyDef.Appearance.Image -> ImageKeyView(context, theme, def.appearance)
+            is KeyDef.Appearance.AltText -> AltTextKeyView(context, theme, def.appearance, horizontalGapScale)
+            is KeyDef.Appearance.ImageText -> ImageTextKeyView(context, theme, def.appearance, horizontalGapScale)
+            is KeyDef.Appearance.Text -> TextKeyView(context, theme, def.appearance, horizontalGapScale)
+            is KeyDef.Appearance.Image -> ImageKeyView(context, theme, def.appearance, horizontalGapScale)
         }.apply {
             setTextScale(currentTextScale)
             soundEffect = when (def) {

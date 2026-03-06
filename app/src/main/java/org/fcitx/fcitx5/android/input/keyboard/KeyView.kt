@@ -52,7 +52,12 @@ import splitties.views.padding
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-abstract class KeyView(ctx: Context, val theme: Theme, val def: KeyDef.Appearance) :
+abstract class KeyView(
+    ctx: Context,
+    val theme: Theme,
+    val def: KeyDef.Appearance,
+    horizontalGapScale: Float = 1f
+) :
     CustomGestureView(ctx) {
 
     val bordered: Boolean
@@ -73,7 +78,9 @@ abstract class KeyView(ctx: Context, val theme: Theme, val def: KeyDef.Appearanc
             if (landscape) prefs.keyHorizontalMarginLandscape else prefs.keyHorizontalMargin
         val vMarginPref =
             if (landscape) prefs.keyVerticalMarginLandscape else prefs.keyVerticalMargin
-        hMargin = if (def.margin) dp(hMarginPref.getValue()) else 0
+        val hScale = horizontalGapScale.coerceIn(0.5f, 1f)
+        val hMarginValue = (hMarginPref.getValue().toFloat() * hScale).roundToInt().coerceAtLeast(0)
+        hMargin = if (def.margin) dp(hMarginValue) else 0
         vMargin = if (def.margin) dp(vMarginPref.getValue()) else 0
     }
 
@@ -258,8 +265,13 @@ abstract class KeyView(ctx: Context, val theme: Theme, val def: KeyDef.Appearanc
 }
 
 @SuppressLint("ViewConstructor")
-open class TextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.Text) :
-    KeyView(ctx, theme, def) {
+open class TextKeyView(
+    ctx: Context,
+    theme: Theme,
+    def: KeyDef.Appearance.Text,
+    horizontalGapScale: Float = 1f
+) :
+    KeyView(ctx, theme, def, horizontalGapScale) {
     val mainText = view(::AutoScaleTextView) {
         isClickable = false
         isFocusable = false
@@ -306,8 +318,13 @@ open class TextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.Text) 
 }
 
 @SuppressLint("ViewConstructor")
-class AltTextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.AltText) :
-    TextKeyView(ctx, theme, def) {
+class AltTextKeyView(
+    ctx: Context,
+    theme: Theme,
+    def: KeyDef.Appearance.AltText,
+    horizontalGapScale: Float = 1f
+) :
+    TextKeyView(ctx, theme, def, horizontalGapScale) {
     val altText = view(::AutoScaleTextView) {
         isClickable = false
         isFocusable = false
@@ -411,8 +428,13 @@ class AltTextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.AltText)
 }
 
 @SuppressLint("ViewConstructor")
-class ImageKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.Image) :
-    KeyView(ctx, theme, def) {
+class ImageKeyView(
+    ctx: Context,
+    theme: Theme,
+    def: KeyDef.Appearance.Image,
+    horizontalGapScale: Float = 1f
+) :
+    KeyView(ctx, theme, def, horizontalGapScale) {
     val img = imageView { configure(theme, def.src, def.variant) }
 
     init {
@@ -438,8 +460,13 @@ private fun ImageView.configure(theme: Theme, @DrawableRes src: Int, variant: Va
 }
 
 @SuppressLint("ViewConstructor")
-class ImageTextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.ImageText) :
-    TextKeyView(ctx, theme, def) {
+class ImageTextKeyView(
+    ctx: Context,
+    theme: Theme,
+    def: KeyDef.Appearance.ImageText,
+    horizontalGapScale: Float = 1f
+) :
+    TextKeyView(ctx, theme, def, horizontalGapScale) {
     val img = imageView {
         configure(theme, def.src, def.variant)
     }

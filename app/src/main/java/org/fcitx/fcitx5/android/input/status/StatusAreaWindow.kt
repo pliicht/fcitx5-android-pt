@@ -28,6 +28,7 @@ import org.fcitx.fcitx5.android.input.dependency.theme
 import org.fcitx.fcitx5.android.input.editorinfo.EditorInfoWindow
 import org.fcitx.fcitx5.android.input.status.StatusAreaEntry.Android.Type.InputMethod
 import org.fcitx.fcitx5.android.input.status.StatusAreaEntry.Android.Type.Keyboard
+import org.fcitx.fcitx5.android.input.status.StatusAreaEntry.Android.Type.OneHandKeyboard
 import org.fcitx.fcitx5.android.input.status.StatusAreaEntry.Android.Type.ReloadConfig
 import org.fcitx.fcitx5.android.input.status.StatusAreaEntry.Android.Type.ThemeList
 import org.fcitx.fcitx5.android.input.wm.InputWindow
@@ -55,8 +56,7 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
 
     private val editorInfoInspector by AppPrefs.getInstance().internal.editorInfoInspector
 
-    private val staticEntries by lazy {
-        arrayOf(
+    private fun staticEntries() = arrayOf(
             StatusAreaEntry.Android(
                 context.getString(R.string.theme),
                 R.drawable.ic_baseline_palette_24,
@@ -76,7 +76,19 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
                 context.getString(R.string.virtual_keyboard),
                 R.drawable.ic_baseline_keyboard_24,
                 Keyboard
+            ),
+            StatusAreaEntry.Android(
+                context.getString(R.string.one_handed_keyboard),
+                R.drawable.ic_baseline_keyboard_tab_24,
+                OneHandKeyboard,
+                service.isOneHandKeyboardEnabled()
             )
+        )
+
+    private fun renderEntries(actions: Array<Action>) {
+        adapter.entries = arrayOf(
+            *staticEntries(),
+            *Array(actions.size) { StatusAreaEntry.fromAction(actions[it]) }
         )
     }
 
@@ -152,6 +164,10 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
                         }
                         Keyboard -> AppUtil.launchMainToKeyboard(context)
                         ThemeList -> AppUtil.launchMainToThemeList(context)
+                        OneHandKeyboard -> {
+                            service.toggleOneHandKeyboard()
+                            renderEntries(fcitx.runImmediately { statusAreaActionsCached })
+                        }
                     }
                 }
             }
@@ -173,10 +189,7 @@ class StatusAreaWindow : InputWindow.ExtendedInputWindow<StatusAreaWindow>(),
     }
 
     override fun onStatusAreaUpdate(actions: Array<Action>) {
-        adapter.entries = arrayOf(
-            *staticEntries,
-            *Array(actions.size) { StatusAreaEntry.fromAction(actions[it]) }
-        )
+        renderEntries(actions)
     }
 
     override fun onCreateView() = view

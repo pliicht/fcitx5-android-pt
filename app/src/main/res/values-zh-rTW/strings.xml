@@ -63,6 +63,7 @@
     <string name="clipboard">剪貼簿</string>
     <string name="keyboard_height">鍵盤高度</string>
     <string name="virtual_keyboard">虛擬鍵盤</string>
+    <string name="one_handed_keyboard">單手鍵盤</string>
     <string name="clipboard_suggestion_timeout">剪貼簿項目逾時</string>
     <string name="version">版本</string>
     <string name="build_time">建構時間</string>

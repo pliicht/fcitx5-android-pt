@@ -184,12 +184,15 @@ class PopupEditorActivity : AppCompatActivity() {
 
             val keyBadge = TextView(this).apply {
                 text = key
-                setTextColor(styledColor(android.R.attr.textColorPrimary))
                 textSize = 14f
                 setTypeface(null, android.graphics.Typeface.BOLD)
                 setPadding(dp(12), dp(5), dp(12), dp(5))
-                setBackgroundColor(styledColor(android.R.attr.colorButtonNormal))
                 gravity = android.view.Gravity.CENTER
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(styledColor(android.R.attr.colorPrimary))
+                    setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                    cornerRadius = dp(4).toFloat()
+                }
             }
 
             val horizontalScrollView = android.widget.HorizontalScrollView(this).apply {
@@ -206,10 +209,13 @@ class PopupEditorActivity : AppCompatActivity() {
                 val candidateChip = TextView(this).apply {
                     text = value
                     textSize = 14f
-                    setTextColor(styledColor(android.R.attr.colorPrimary))
                     setPadding(dp(10), dp(5), dp(10), dp(5))
-                    setBackgroundColor(styledColor(android.R.attr.colorBackgroundFloating))
                     gravity = android.view.Gravity.CENTER
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(styledColor(android.R.attr.colorButtonNormal))
+                        setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                        cornerRadius = dp(4).toFloat()
+                    }
                     setOnClickListener { openEditor(key) }
                     setOnLongClickListener {
                         confirmDelete(key)
@@ -290,12 +296,10 @@ class PopupEditorActivity : AppCompatActivity() {
         val keyEdit = TextView(this@PopupEditorActivity).apply {
             text = currentKeyValue.ifEmpty { getString(R.string.popup_editor_key_input_hint) }
             textSize = 16f
-            setTextColor(styledColor(android.R.attr.colorPrimary))
             setPadding(dp(12), dp(8), dp(12), dp(8))
-            setBackgroundColor(styledColor(android.R.attr.colorButtonNormal))
             gravity = android.view.Gravity.CENTER
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(styledColor(android.R.attr.colorButtonNormal))
+                setColor(styledColor(android.R.attr.colorPrimary))
                 setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
                 cornerRadius = dp(4).toFloat()
             }
@@ -357,13 +361,12 @@ class PopupEditorActivity : AppCompatActivity() {
                 val candidateChip = TextView(this@PopupEditorActivity).apply {
                     text = value
                     textSize = 14f
-                    setTextColor(styledColor(android.R.attr.colorPrimary))
                     setPadding(dp(12), dp(8), dp(12), dp(8))
                     gravity = android.view.Gravity.CENTER
                     // Add border effect using drawable
                     background = android.graphics.drawable.GradientDrawable().apply {
-                        setColor(styledColor(android.R.attr.colorBackgroundFloating))
-                        setStroke(dp(1), styledColor(android.R.attr.colorButtonNormal))
+                        setColor(styledColor(android.R.attr.colorButtonNormal))
+                        setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
                         cornerRadius = dp(4).toFloat()
                     }
                     setOnClickListener {
@@ -413,11 +416,10 @@ class PopupEditorActivity : AppCompatActivity() {
             val addChip = TextView(this@PopupEditorActivity).apply {
                 text = getString(R.string.popup_editor_add_candidate_button)
                 textSize = 16f
-                setTextColor(styledColor(android.R.attr.colorPrimary))
                 setPadding(dp(12), dp(8), dp(12), dp(8))
                 gravity = android.view.Gravity.CENTER
                 background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(styledColor(android.R.attr.colorButtonNormal))
+                    setColor(styledColor(android.R.attr.colorPrimary))
                     setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
                     cornerRadius = dp(4).toFloat()
                 }

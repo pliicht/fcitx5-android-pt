@@ -351,4 +351,46 @@
     <string name="emoji_skin_tone_type_6">🏿 Type-6</string>
     <string name="hide_unsupported_emojis">Hide unsupported Emojis</string>
     <string name="key_border_stroke">Enable stroke for key border</string>
+    
+    <!-- Text Keyboard Layout Editor -->
+    <string name="edit_text_keyboard_layout">Edit Text Keyboard Layout</string>
+    <string name="edit_text_keyboard_layout_summary">Edit text keyboard layout (TextKeyboardLayout.json)</string>
+    <string name="text_keyboard_layout_preview">Preview</string>
+    <string name="text_keyboard_layout_add_layout">Add Layout</string>
+    <string name="text_keyboard_layout_add_row">Add Row</string>
+    <string name="text_keyboard_layout_add_key">Add Key</string>
+    <string name="text_keyboard_layout_hint">Tap a key to edit. Long press to delete. Use + button to add a key to row.</string>
+    <string name="text_keyboard_layout_key_type">Key Type</string>
+    <string name="text_keyboard_layout_key_main">Main Character</string>
+    <string name="text_keyboard_layout_key_alt">Alt Character (Punctuation)</string>
+    <string name="text_keyboard_layout_key_display_text">Display Text</string>
+    <string name="text_keyboard_layout_key_label">Label</string>
+    <string name="text_keyboard_layout_key_sub_label">Sub Label</string>
+    <string name="text_keyboard_layout_key_weight">Weight (percentWidth)</string>
+    <string name="text_keyboard_layout_layout_name">Layout Name</string>
+    <string name="text_keyboard_layout_layout_name_hint">e.g., rime, pinyin</string>
+    <string name="text_keyboard_layout_copy_from">Copy from existing layout</string>
+    <string name="text_keyboard_layout_name_empty">Layout name cannot be empty</string>
+    <string name="text_keyboard_layout_name_exists">Layout already exists: %1$s</string>
+    <string name="text_keyboard_layout_delete_key_confirm">Delete this key?</string>
+    <string name="text_keyboard_layout_delete_layout_confirm">Delete layout "%1$s"?</string>
+    <string name="text_keyboard_layout_delete_key_confirm_with_label">Delete key "%1$s"?</string>
+    <string name="text_keyboard_layout_delete_row_confirm">Delete row %1$d?</string>
+    <string name="text_keyboard_layout_key_title">Key "%1$s"</string>
+    <string name="text_keyboard_layout_move_left">← Move Left</string>
+    <string name="text_keyboard_layout_move_right">→ Move Right</string>
+    <string name="text_keyboard_layout_select_input_method_to_add">Select input method to add:</string>
+    <string name="text_keyboard_layout_no_additional_input_methods">No additional input methods available</string>
+    <string name="text_keyboard_layout_layout_exists_for_input_method">Layout for this input method already exists</string>
+    <string name="text_keyboard_layout_preview_error">Preview error: %1$s</string>
+    <string name="text_keyboard_layout_add_mode">Add mode</string>
+    <string name="text_keyboard_layout_display_text_mode_specific">%1$s (Mode-specific):</string>
+    <string name="text_keyboard_layout_mode_name_hint">Mode name</string>
+    <string name="text_keyboard_layout_display_value_hint">Display value</string>
+    <string name="text_keyboard_layout_key_label_caps">Caps</string>
+    <string name="text_keyboard_layout_key_label_lang">Lang</string>
+    <string name="text_keyboard_layout_key_label_space">Space</string>
+    <string name="text_keyboard_layout_key_label_enter">Enter</string>
+    <string name="cannot_resolve_text_keyboard_layout">Unable to resolve text keyboard layout file</string>
+    <string name="text_keyboard_layout_saved_at">TextKeyboardLayout.json saved at: %1$s</string>
 </resources>

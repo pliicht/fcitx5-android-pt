@@ -26,22 +26,25 @@ object DisplayTextResolver {
     fun resolve(
         displayText: JsonElement?,
         subModeLabel: String,
+        subModeName: String,
         default: String
     ): String {
         return when {
             displayText == null -> default
             displayText is JsonPrimitive -> displayText.content
-            displayText is JsonObject -> resolveMap(displayText, subModeLabel) ?: default
+            displayText is JsonObject -> resolveMap(displayText, subModeLabel, subModeName) ?: default
             else -> default
         }
     }
 
     private fun resolveMap(
         map: JsonObject,
-        subModeLabel: String
+        subModeLabel: String,
+        subModeName: String
     ): String? {
-        // 直接匹配子模式标签
+        // 优先匹配子模式 label，其次 name，最后回退空 key
         return map[subModeLabel]?.takeIf { it is JsonPrimitive && it !is JsonNull }?.jsonPrimitive?.content
+            ?: map[subModeName]?.takeIf { it is JsonPrimitive && it !is JsonNull }?.jsonPrimitive?.content
             ?: map[""]?.takeIf { it is JsonPrimitive && it !is JsonNull }?.jsonPrimitive?.content
     }
 }
@@ -135,6 +138,7 @@ class TextKeyboard(
                     displayText = DisplayTextResolver.resolve(
                         key.displayText,
                         ime?.subMode?.label ?: "",
+                        ime?.subMode?.name ?: "",
                         key.main ?: ""
                     )
                 )

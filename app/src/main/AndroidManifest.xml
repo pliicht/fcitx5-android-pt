@@ -71,6 +71,10 @@
             android:exported="false"
             android:label="@string/edit_popup_preset" />
         <activity
+            android:name=".ui.main.settings.behavior.TextKeyboardLayoutEditorActivity"
+            android:exported="false"
+            android:label="@string/edit_text_keyboard_layout" />
+        <activity
             android:name=".ui.main.CropImageActivity"
             android:exported="false" />
         <activity

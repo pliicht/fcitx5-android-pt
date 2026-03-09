@@ -33,5 +33,15 @@ class KeyboardSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
 				true
 			}
 		})
+		screen.addPreference(Preference(requireContext()).apply {
+			setTitle(R.string.edit_text_keyboard_layout)
+			setSummary(R.string.edit_text_keyboard_layout_summary)
+			isSingleLineTitle = false
+			isIconSpaceReserved = false
+			setOnPreferenceClickListener {
+				startActivity(Intent(requireContext(), TextKeyboardLayoutEditorActivity::class.java))
+				true
+			}
+		})
 	}
 }

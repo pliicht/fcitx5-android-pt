@@ -20,6 +20,13 @@ class FlowLayout @JvmOverloads constructor(
         val widthSize = MeasureSpec.getSize(widthMeasureSpec)
         val width = if (widthMode == MeasureSpec.EXACTLY) widthSize else Int.MAX_VALUE
 
+        val paddingLeft = paddingLeft
+        val paddingRight = paddingRight
+        val paddingTop = paddingTop
+        val paddingBottom = paddingBottom
+
+        val availableWidth = width - paddingLeft - paddingRight
+
         var height = 0
         var currentWidth = 0
         var lineHeight = 0
@@ -32,7 +39,7 @@ class FlowLayout @JvmOverloads constructor(
             val childWidth = child.measuredWidth + lp.leftMargin + lp.rightMargin
             val childHeight = child.measuredHeight + lp.topMargin + lp.bottomMargin
 
-            if (currentWidth + childWidth > width) {
+            if (currentWidth + childWidth > availableWidth) {
                 height += lineHeight
                 currentWidth = 0
                 lineHeight = 0
@@ -44,13 +51,19 @@ class FlowLayout @JvmOverloads constructor(
         height += lineHeight
 
         setMeasuredDimension(
-            if (widthMode == MeasureSpec.EXACTLY) widthSize else minOf(width, currentWidth),
-            height
+            if (widthMode == MeasureSpec.EXACTLY) widthSize else minOf(width, currentWidth + paddingLeft + paddingRight),
+            height + paddingTop + paddingBottom
         )
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         val width = r - l
+        val paddingLeft = paddingLeft
+        val paddingRight = paddingRight
+        val paddingTop = paddingTop
+
+        val availableWidth = width - paddingLeft - paddingRight
+
         var x = 0
         var y = 0
         var lineHeight = 0
@@ -62,14 +75,14 @@ class FlowLayout @JvmOverloads constructor(
             val childWidth = child.measuredWidth
             val childHeight = child.measuredHeight
 
-            if (x + childWidth + lp.leftMargin + lp.rightMargin > width) {
+            if (x + childWidth + lp.leftMargin + lp.rightMargin > availableWidth) {
                 x = 0
                 y += lineHeight
                 lineHeight = 0
             }
 
-            val left = x + lp.leftMargin
-            val top = y + lp.topMargin
+            val left = x + lp.leftMargin + paddingLeft
+            val top = y + lp.topMargin + paddingTop
             val right = left + childWidth
             val bottom = top + childHeight
 

@@ -351,4 +351,46 @@
     <string name="emoji_skin_tone_type_6">🏿 深肤色 (Type-6)</string>
     <string name="hide_unsupported_emojis">隐藏不支持的表情</string>
     <string name="key_border_stroke">启用按键边框描边</string>
+
+    <!-- Text Keyboard Layout Editor -->
+    <string name="edit_text_keyboard_layout">编辑文本键盘布局</string>
+    <string name="edit_text_keyboard_layout_summary">编辑文本键盘布局（TextKeyboardLayout.json）</string>
+    <string name="text_keyboard_layout_preview">预览</string>
+    <string name="text_keyboard_layout_add_layout">添加布局</string>
+    <string name="text_keyboard_layout_add_row">添加行</string>
+    <string name="text_keyboard_layout_add_key">添加按键</string>
+    <string name="text_keyboard_layout_hint">点击按键可编辑，长按可删除。使用 + 按钮向行中添加按键。</string>
+    <string name="text_keyboard_layout_key_type">按键类型</string>
+    <string name="text_keyboard_layout_key_main">主字符</string>
+    <string name="text_keyboard_layout_key_alt">副字符（标点）</string>
+    <string name="text_keyboard_layout_key_display_text">显示文本</string>
+    <string name="text_keyboard_layout_key_label">标签</string>
+    <string name="text_keyboard_layout_key_sub_label">子标签</string>
+    <string name="text_keyboard_layout_key_weight">权重（percentWidth）</string>
+    <string name="text_keyboard_layout_layout_name">布局名称</string>
+    <string name="text_keyboard_layout_layout_name_hint">例如：rime、pinyin</string>
+    <string name="text_keyboard_layout_copy_from">从现有布局复制</string>
+    <string name="text_keyboard_layout_name_empty">布局名称不能为空</string>
+    <string name="text_keyboard_layout_name_exists">布局已存在：%1$s</string>
+    <string name="text_keyboard_layout_delete_key_confirm">删除这个按键？</string>
+    <string name="text_keyboard_layout_delete_layout_confirm">删除布局“%1$s”？</string>
+    <string name="text_keyboard_layout_delete_key_confirm_with_label">删除按键“%1$s”？</string>
+    <string name="text_keyboard_layout_delete_row_confirm">删除第 %1$d 行？</string>
+    <string name="text_keyboard_layout_key_title">按键“%1$s”</string>
+    <string name="text_keyboard_layout_move_left">← 左移</string>
+    <string name="text_keyboard_layout_move_right">→ 右移</string>
+    <string name="text_keyboard_layout_select_input_method_to_add">选择要添加的输入法：</string>
+    <string name="text_keyboard_layout_no_additional_input_methods">没有可添加的输入法</string>
+    <string name="text_keyboard_layout_layout_exists_for_input_method">该输入法的布局已存在</string>
+    <string name="text_keyboard_layout_preview_error">预览错误：%1$s</string>
+    <string name="text_keyboard_layout_add_mode">添加模式</string>
+    <string name="text_keyboard_layout_display_text_mode_specific">%1$s（模式专用）：</string>
+    <string name="text_keyboard_layout_mode_name_hint">模式名称</string>
+    <string name="text_keyboard_layout_display_value_hint">显示值</string>
+    <string name="text_keyboard_layout_key_label_caps">Caps</string>
+    <string name="text_keyboard_layout_key_label_lang">Lang</string>
+    <string name="text_keyboard_layout_key_label_space">Space</string>
+    <string name="text_keyboard_layout_key_label_enter">Enter</string>
+    <string name="cannot_resolve_text_keyboard_layout">无法定位文本键盘布局文件</string>
+    <string name="text_keyboard_layout_saved_at">TextKeyboardLayout.json 已保存到：%1$s</string>
 </resources>

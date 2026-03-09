@@ -24,6 +24,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.text.HtmlCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -42,6 +43,7 @@ import org.fcitx.fcitx5.android.input.config.ConfigProviders
 import org.fcitx.fcitx5.android.input.config.ConfigProvider
 import org.fcitx.fcitx5.android.input.config.DefaultConfigProvider
 import org.fcitx.fcitx5.android.input.keyboard.TextKeyboard
+import org.fcitx.fcitx5.android.utils.InputMethodUtil
 import splitties.dimensions.dp
 import splitties.resources.styledColor
 import splitties.views.backgroundColor
@@ -220,6 +222,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         buildSubModeSpinner()
         buildRows()
         updatePreview()
+        maybePromptSwitchToFcitxIme()
     }
 
     override fun onDestroy() {
@@ -1951,6 +1954,36 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
     private fun showToast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun maybePromptSwitchToFcitxIme() {
+        if (InputMethodUtil.isSelected()) return
+
+        val imeEnabled = InputMethodUtil.isEnabled()
+        val appLabel = runCatching { applicationInfo.loadLabel(packageManager).toString() }
+            .getOrDefault(getString(R.string.app_name_release))
+        val appName = appLabel
+        val messageRaw = if (imeEnabled) {
+            getString(R.string.select_ime_hint, appName)
+        } else {
+            getString(R.string.enable_ime_hint, appName)
+        }
+        val message = HtmlCompat.fromHtml(messageRaw, HtmlCompat.FROM_HTML_MODE_LEGACY)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(if (imeEnabled) R.string.select_ime else R.string.enable_ime)
+            .setMessage(message)
+            .setPositiveButton(if (imeEnabled) R.string.select_ime else R.string.enable_ime) { _, _ ->
+                if (imeEnabled) {
+                    InputMethodUtil.showPicker()
+                } else {
+                    InputMethodUtil.startSettingsActivity(this)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnShowListener { styleDialogTypography(dialog) }
+        dialog.show()
     }
 
     private fun styleDialogTypography(dialog: AlertDialog) {

@@ -5,7 +5,12 @@
 package org.fcitx.fcitx5.android.input.config
 
 import kotlinx.serialization.json.Json
-import org.json.JSONObject
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 
 object UserJsonConfigStore {
@@ -48,9 +53,10 @@ object UserJsonConfigStore {
             ?.takeIf { it.exists() }
             ?: return@runCatching null
         val content = cleanJson(file.readText(), stripLineComments = true)
-        val json = JSONObject(content)
-        val parsed = json.keys().asSequence().associateWith { key ->
-            json.optString(key)
+        val json = parser.parseToJsonElement(content)
+        val jsonObject = parser.decodeFromJsonElement<JsonObject>(json)
+        val parsed = jsonObject.toMap().mapValues { (_, value) ->
+            value.jsonPrimitive.content
                 .split(",")
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
@@ -66,13 +72,14 @@ object UserJsonConfigStore {
         val file = UserConfigFiles.fontsetJson()
             ?: error("Cannot resolve fontset.json path")
         file.parentFile?.mkdirs()
-        val json = JSONObject()
-        pathMap.forEach { (key, values) ->
-            if (values.isNotEmpty()) {
-                json.put(key, values.joinToString(","))
+        val json = buildJsonObject {
+            pathMap.forEach { (key, values) ->
+                if (values.isNotEmpty()) {
+                    put(key, JsonPrimitive(values.joinToString(",")))
+                }
             }
         }
-        file.writeText(json.toString(2) + "\n")
+        file.writeText(parser.encodeToJsonElement(json).toString() + "\n")
         file
     }
 }

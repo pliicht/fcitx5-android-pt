@@ -30,9 +30,11 @@ import splitties.views.backgroundColor
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.matchParent
 import splitties.views.dsl.core.wrapContent
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
+import kotlinx.serialization.encodeToString
 import java.io.File
+
+private val prettyJson = Json { prettyPrint = true }
 
 class PopupEditorActivity : AppCompatActivity() {
 
@@ -508,13 +510,12 @@ class PopupEditorActivity : AppCompatActivity() {
             return
         }
         file.parentFile?.mkdirs()
-        val json = JSONObject()
-        entries.toSortedMap().forEach { (k, v) ->
-            val arr = JSONArray()
-            v.forEach { arr.put(it) }
-            json.put(k, arr)
-        }
-        file.writeText(json.toString(2) + "\n")
+        
+        val jsonElement = JsonObject(entries.toSortedMap().mapValues { (_, v) ->
+            JsonArray(v.map { JsonPrimitive(it) })
+        })
+
+        file.writeText(prettyJson.encodeToString(jsonElement) + "\n")
         // notify provider watcher
         ConfigProviders.ensureWatching()
         showToast(getString(R.string.popup_preset_saved_at, file.absolutePath))

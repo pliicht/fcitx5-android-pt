@@ -192,19 +192,6 @@ object ConfigProviders {
     fun readFontsetPathMapSnapshot(): Result<UserJsonConfigStore.JsonSnapshot<Map<String, List<String>>>?> =
         runCatching {
             ensureWatching()
-            val file = provider.fontsetFile()?.takeIf { it.exists() } ?: return@runCatching null
-            val content = UserJsonConfigStore.cleanJson(file.readText(), stripLineComments = true)
-            val json = org.json.JSONObject(content)
-            val parsed = json.keys().asSequence().associateWith { key ->
-                json.optString(key)
-                    .split(",")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-            }
-            UserJsonConfigStore.JsonSnapshot(
-                value = parsed,
-                lastModified = file.lastModified(),
-                file = file
-            )
+            UserJsonConfigStore.readFontsetPathMapSnapshot().getOrNull()
         }
 }

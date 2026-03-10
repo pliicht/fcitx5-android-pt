@@ -50,9 +50,29 @@ import splitties.views.backgroundColor
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.matchParent
 import splitties.views.dsl.core.wrapContent
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import java.io.File
+
+// Extension function to convert JsonElement to Any?
+private fun JsonElement.toAny(): Any? = when (this) {
+    is JsonObject -> this
+    is JsonArray -> this.map { it.toAny() }
+    is JsonPrimitive -> {
+        if (this.isString) this.content
+        else this.booleanOrNull ?: this.intOrNull ?: this.doubleOrNull
+    }
+}
+
+// Lenient JSON parser for reading user config files
+private val lenientJson = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+}
+
+// Pretty-print JSON formatter for writing files
+private val prettyJson = Json { prettyPrint = true }
 
 class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
@@ -256,52 +276,71 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         allImesFromJson = runCatching {
             fcitxConnection.runImmediately { enabledIme() }
         }.getOrDefault(emptyArray())
-        
+
         val parsed: Map<String, List<List<Map<String, Any?>>>> = if (file?.exists() == true && file.length() > 0) {
             // Read and parse JSON manually
             runCatching {
                 var jsonStr = file.readText()
                 // Remove // comments (JSON doesn't support comments, but we allow them for convenience)
+                // Only remove comments that start at the beginning of a line or after whitespace
                 jsonStr = jsonStr.lines()
                     .joinToString("\n") { line ->
+                        // Find // that is not inside a string
                         val commentIdx = line.indexOf("//")
-                        if (commentIdx >= 0) line.substring(0, commentIdx) else line
+                        if (commentIdx >= 0) {
+                            // Check if // is inside a string by counting quotes before it
+                            val beforeComment = line.substring(0, commentIdx)
+                            val quoteCount = beforeComment.count { it == '"' }
+                            // If even number of quotes, // is not inside a string
+                            if (quoteCount % 2 == 0) {
+                                line.substring(0, commentIdx)
+                            } else {
+                                line
+                            }
+                        } else {
+                            line
+                        }
                     }
-                android.util.Log.d("TextKeyboardEditor", "JSON content length after cleaning: ${jsonStr.length}")
-                val json = JSONObject(jsonStr)
-                android.util.Log.d("TextKeyboardEditor", "JSON keys: ${json.keys().asSequence().toList()}")
-                
+
+                val jsonElement = lenientJson.parseToJsonElement(jsonStr)
+                val jsonObject = jsonElement.jsonObject
+
                 val result = mutableMapOf<String, List<List<Map<String, Any?>>>>()
-                json.keys().forEach { layoutName ->
-                    android.util.Log.d("TextKeyboardEditor", "Processing layout: $layoutName")
-                    val rowsArray = json.getJSONArray(layoutName)
+                jsonObject.entries.forEach { (layoutName, layoutValue) ->
+                    val rowsArray = layoutValue.jsonArray
                     val rows = mutableListOf<List<Map<String, Any?>>>()
-                    for (i in 0 until rowsArray.length()) {
-                        val rowArray = rowsArray.getJSONArray(i)
+                    for (i in rowsArray.indices) {
+                        val rowArray = rowsArray[i].jsonArray
                         val row = mutableListOf<Map<String, Any?>>()
-                        for (j in 0 until rowArray.length()) {
+                        for (j in rowArray.indices) {
+                            val rowElement = rowArray[j]
                             // Skip null or invalid entries
-                            if (rowArray.isNull(j)) {
-                                android.util.Log.w("TextKeyboardEditor", "Skipping null entry at row $i, index $j")
+                            if (rowElement is JsonNull) {
                                 continue
                             }
-                            val keyJson = rowArray.getJSONObject(j)
+                            // Make sure it's a JsonObject
+                            if (rowElement !is JsonObject) {
+                                continue
+                            }
+                            val keyJson = rowElement
                             val keyMap = mutableMapOf<String, Any?>()
-                            keyJson.keys().asSequence().toList().forEach { key ->
-                                keyMap[key] = when (val value = keyJson.get(key)) {
-                                    is JSONObject -> {
+                            keyJson.entries.forEach { (key, value) ->
+                                keyMap[key] = when (value) {
+                                    is JsonObject -> {
                                         // Handle nested objects (like displayText)
-                                        // Keep as JSONObject for proper JSON serialization
+                                        // Keep as JsonObject for proper JSON serialization
                                         value
                                     }
-                                    is JSONArray -> {
+                                    is JsonArray -> {
                                         // Handle arrays
-                                        List(value.length()) { idx -> value.get(idx) }
+                                        value.jsonArray.map { element -> element.toAny() }
                                     }
-                                    is String -> value
-                                    is Number -> value
-                                    is Boolean -> value
-                                    else -> value.toString()
+                                    is JsonPrimitive -> {
+                                        // Handle primitives - preserve type
+                                        if (value.isString) value.content
+                                        else value.booleanOrNull ?: value.intOrNull ?: value.doubleOrNull ?: value.content
+                                    }
+                                    is JsonNull -> null
                                 }
                             }
                             row.add(keyMap)
@@ -309,23 +348,14 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                         rows.add(row)
                     }
                     result[layoutName] = rows
-                    android.util.Log.d("TextKeyboardEditor", "Layout $layoutName has ${rows.size} rows")
                 }
-                android.util.Log.d("TextKeyboardEditor", "Loaded ${result.size} layouts: ${result.keys}")
                 result
             }.onFailure { e ->
                 android.util.Log.e("TextKeyboardEditor", "Failed to parse JSON", e)
-            }.getOrNull() ?: run {
-                android.util.Log.d("TextKeyboardEditor", "Parse failed, loading default")
-                // Parse failed, load default
-                readDefaultPresetFromTextKeyboardKt()
-            }
+            }.getOrNull() ?: readDefaultPresetFromTextKeyboardKt()
         } else {
-            android.util.Log.d("TextKeyboardEditor", "File not found or empty, loading default")
-            // File doesn't exist or is empty, load default from TextKeyboard.kt
             readDefaultPresetFromTextKeyboardKt()
         }
-        android.util.Log.d("TextKeyboardEditor", "Final entries: ${parsed.keys}")
 
         parsed.toSortedMap().forEach { (k, v) ->
             entries[k] = v.map { row ->
@@ -578,8 +608,8 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         rows.forEach { row ->
             row.forEach { key ->
                 when (val displayText = key["displayText"]) {
-                    is JSONObject -> {
-                        displayText.keys().forEach { mode ->
+                    is JsonObject -> {
+                        displayText.keys.forEach { mode ->
                             val normalized = mode.trim()
                             if (normalized.isNotEmpty()) labels.add(normalized)
                         }
@@ -1073,8 +1103,8 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         run {
             val displayTextData = keyData["displayText"]
             val displayTextMap = when (displayTextData) {
-                is JSONObject -> displayTextData.keys().asSequence().associateWith { key ->
-                    displayTextData.opt(key)
+                is JsonObject -> displayTextData.mapValues { entry ->
+                    entry.value.toAny()
                 }
                 is Map<*, *> -> displayTextData
                 else -> null
@@ -1805,21 +1835,15 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
         // Create a temporary layout file for preview
         val tempFile = File(cacheDir, "temp_layout.json")
-        val tempJson = JSONObject()
-        val rowsArray = JSONArray()
-        rows.forEach { row ->
-            val rowArray = JSONArray()
-            row.forEach { key ->
-                val keyJson = JSONObject()
-                key.forEach { (k, v) ->
-                    putJsonValue(keyJson, k, v)
-                }
-                rowArray.put(keyJson)
-            }
-            rowsArray.put(rowArray)
-        }
-        tempJson.put(layoutName, rowsArray)
-        tempFile.writeText(tempJson.toString())
+        val rowsArray = JsonArray(rows.map { row ->
+            JsonArray(row.map { key ->
+                JsonObject(key.entries.associate { (k, v) ->
+                    k to convertToJsonProperty(v)
+                })
+            })
+        })
+        val tempJson = JsonObject(mapOf(layoutName to rowsArray))
+        tempFile.writeText(Json.encodeToString(tempJson))
 
         // Temporarily replace the layout file and reload
         val provider = ConfigProviders.provider
@@ -1916,24 +1940,17 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         }
         file.parentFile?.mkdirs()
 
-        val json = JSONObject()
-        entries.toSortedMap().forEach { (layoutName, rows) ->
-            val rowsArray = JSONArray()
-            rows.forEach { row ->
-                val rowArray = JSONArray()
-                row.forEach { key ->
-                    val keyJson = JSONObject()
-                    key.forEach { (k, v) ->
-                        putJsonValue(keyJson, k, v)
-                    }
-                    rowArray.put(keyJson)
-                }
-                rowsArray.put(rowArray)
-            }
-            json.put(layoutName, rowsArray)
-        }
+        val jsonElement = JsonObject(entries.toSortedMap().mapValues { (_, rows) ->
+            JsonArray(rows.map { row ->
+                JsonArray(row.map { key ->
+                    JsonObject(key.entries.associate { (k, v) ->
+                        k to convertToJsonProperty(v)
+                    })
+                })
+            })
+        })
 
-        file.writeText(json.toString(2) + "\n")
+        file.writeText(prettyJson.encodeToString(jsonElement) + "\n")
 
         // Clear cache to force reload on next access
         TextKeyboard.cachedLayoutJsonMap = null
@@ -1944,27 +1961,26 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun putJsonValue(target: JSONObject, key: String, value: Any?) {
-        when (value) {
-            is JSONObject -> target.put(key, value)
-            is JSONArray -> target.put(key, value)
-            is Map<*, *> -> {
-                val nestedJson = JSONObject()
-                value.forEach { (subKey, subValue) ->
-                    nestedJson.put(subKey.toString(), subValue ?: JSONObject.NULL)
-                }
-                target.put(key, nestedJson)
+    private fun convertToJsonProperty(value: Any?): JsonElement = when (value) {
+        is JsonObject -> value
+        is JsonArray -> value
+        is Map<*, *> -> {
+            val map = value.mapValues { (subKey, subValue) ->
+                convertToJsonProperty(subValue)
             }
-            is List<*> -> {
-                val arr = JSONArray()
-                value.forEach { arr.put(it ?: JSONObject.NULL) }
-                target.put(key, arr)
-            }
-            null -> target.put(key, JSONObject.NULL)
-            is Number, is Boolean, is String -> target.put(key, value)
-            else -> target.put(key, value.toString())
+            JsonObject(map.mapKeys { it.key.toString() }.toMap())
         }
+        is List<*> -> {
+            val list = value.map { convertToJsonProperty(it) }
+            JsonArray(list)
+        }
+        null -> JsonNull
+        is Number -> JsonPrimitive(value)
+        is Boolean -> JsonPrimitive(value)
+        is String -> JsonPrimitive(value)
+        else -> JsonPrimitive(value.toString())
     }
+
 
     private fun showToast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()

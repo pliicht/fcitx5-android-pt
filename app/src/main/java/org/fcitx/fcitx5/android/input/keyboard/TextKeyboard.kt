@@ -42,7 +42,7 @@ object DisplayTextResolver {
         subModeLabel: String,
         subModeName: String
     ): String? {
-        // 优先匹配子模式 label，其次 name，最后回退空 key
+        // Prioritize matching sub-mode label, then name, finally fall back to empty key
         return map[subModeLabel]?.takeIf { it is JsonPrimitive && it !is JsonNull }?.jsonPrimitive?.content
             ?: map[subModeName]?.takeIf { it is JsonPrimitive && it !is JsonNull }?.jsonPrimitive?.content
             ?: map[""]?.takeIf { it is JsonPrimitive && it !is JsonNull }?.jsonPrimitive?.content

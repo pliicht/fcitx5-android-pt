@@ -74,6 +74,7 @@ import splitties.views.dsl.core.matchParent
 import splitties.views.dsl.core.view
 import splitties.views.dsl.core.withTheme
 import splitties.views.dsl.core.wrapContent
+import splitties.views.backgroundColor
 import splitties.views.imageDrawable
 
 @SuppressLint("ViewConstructor")
@@ -105,9 +106,8 @@ class InputView(
     }
 
     private fun createHandleDrawable(radius: Float = dp(5).toFloat()) = GradientDrawable().apply {
-        setColor(theme.barColor)
+        setColor(theme.accentKeyBackgroundColor)
         cornerRadius = radius
-        alpha = 0xAA
     }
 
     private fun updateHandlePosition() {
@@ -164,8 +164,8 @@ class InputView(
 
         // Move handle (centered horizontally above keyboard)
         val moveHandleSize = dp(24)
-        floatingMoveHandle.translationX = kX + (kWidth - moveHandleSize) / 2
-        floatingMoveHandle.translationY = kY - moveHandleSize - dp(4)
+        adjustableHandle.translationX = kX + (kWidth - moveHandleSize) / 2
+        adjustableHandle.translationY = kY - moveHandleSize - dp(8)
 
         val moveBgDrawable = createHandleDrawable(moveHandleSize / 2f)
         val moveIconDrawable = ContextCompat.getDrawable(context, R.drawable.ic_move_handle_cross)?.mutate()
@@ -178,8 +178,8 @@ class InputView(
         } else {
             moveBgDrawable
         }
-        floatingMoveHandle.background = finalDrawable
-        floatingMoveHandle.updateLayoutParams {
+        adjustableHandle.background = finalDrawable
+        adjustableHandle.updateLayoutParams {
             width = moveHandleSize
             height = moveHandleSize
         }
@@ -287,47 +287,275 @@ class InputView(
         }
     }
 
-    private val floatingMoveHandle = view(::View) {
+    private val adjustableHandle = view(::View) {
         visibility = GONE
         setOnTouchListener { v, event ->
-            if (!isFloating) return@setOnTouchListener false
-            v.parent?.requestDisallowInterceptTouchEvent(true)
+            // Check if we're in adjusting mode for bottom padding adjustment
+            if (isAdjustingMode) {
+                // Handle bottom padding adjustment
+                v.parent?.requestDisallowInterceptTouchEvent(true)
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        adjustingResizeStartBottomPadding = resolveKeyboardBottomPadding()
+                        lastAdjustingTouchY = event.rawY
+                        v.isPressed = true
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val delta = (lastAdjustingTouchY - event.rawY).toInt()
+                        // Scale: 100px drag = 20dp padding change
+                        val deltaPadding = (delta * 0.2f).toInt()
+                        val newPadding = (adjustingResizeStartBottomPadding + deltaPadding).coerceIn(0, 100)
+                        val currentPadding = resolveKeyboardBottomPadding()
+                        if (newPadding != currentPadding) {
+                            if (isLandscapeOrientation) {
+                                keyboardPrefs.keyboardBottomPaddingLandscape.setValue(newPadding)
+                            } else {
+                                keyboardPrefs.keyboardBottomPadding.setValue(newPadding)
+                            }
+                            updateKeyboardSize()
+                            keyboardView.post {
+                                updateAdjustingHandlePosition()
+                            }
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        v.parent?.requestDisallowInterceptTouchEvent(false)
+                        v.isPressed = false
+                        true
+                    }
+                    else -> false
+                }
+            } else if (isFloating) {
+                // Handle floating move functionality
+                v.parent?.requestDisallowInterceptTouchEvent(true)
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        lastTouchX = event.rawX
+                        lastTouchY = event.rawY
+                        v.isPressed = true
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = event.rawX - lastTouchX
+                        val dy = event.rawY - lastTouchY
+                        keyboardView.translationX += dx
+                        keyboardView.translationY += dy
+                        clampFloatingPosition()
+                        keyboardWindow.updateBounds()
+
+                        preedit.ui.root.translationX = keyboardView.translationX
+                        preedit.ui.root.translationY = keyboardView.translationY
+
+                        updateHandlePosition()
+
+                        lastTouchX = event.rawX
+                        lastTouchY = event.rawY
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        v.parent?.requestDisallowInterceptTouchEvent(false)
+                        v.isPressed = false
+                        keyboardWindow.updateBounds()
+                        saveFloatingPosition(
+                            keyboardView.translationX.toInt(),
+                            keyboardView.translationY.toInt()
+                        )
+                        true
+                    }
+                    else -> false
+                }
+            } else {
+                // Neither in adjusting mode nor floating mode, return false
+                false
+            }
+        }
+    }
+
+    // Adjusting mode handles
+    private val adjustingHeightHandle = view(::View) {
+        visibility = GONE
+        // Background set via updateAdjustingHandleAppearance
+        // Larger touch area, visual handle is smaller and centered
+        isClickable = true
+        isFocusable = true
+        setOnTouchListener { v, event ->
+            if (!isAdjustingMode) return@setOnTouchListener false
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    lastTouchX = event.rawX
-                    lastTouchY = event.rawY
+                    // Store the current preference value and touch position
+                    adjustingResizeStartHeight = resolveKeyboardHeightPercent()
+                    lastAdjustingTouchY = event.rawY
+                    // Also store the keyboard height at touch start for accurate calculation
+                    adjustingStartKeyboardTop = keyboardView.top
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
                     v.isPressed = true
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - lastTouchX
-                    val dy = event.rawY - lastTouchY
-                    keyboardView.translationX += dx
-                    keyboardView.translationY += dy
-                    clampFloatingPosition()
-                    keyboardWindow.updateBounds()
-
-                    preedit.ui.root.translationX = keyboardView.translationX
-                    preedit.ui.root.translationY = keyboardView.translationY
-
-                    updateHandlePosition()
-
-                    lastTouchX = event.rawX
-                    lastTouchY = event.rawY
+                    val delta = event.rawY - lastAdjustingTouchY
+                    // Calculate percent change based on touch movement
+                    // Moving up (negative delta) should increase height
+                    // Moving down (positive delta) should decrease height
+                    val screenHeight = resources.displayMetrics.heightPixels.toFloat()
+                    // Scale factor: 100px drag = 10% keyboard height change (more responsive)
+                    val deltaPercent = (delta / screenHeight) * 100f
+                    // Match the preference range: 10% to 90%
+                    val newPercent = (adjustingResizeStartHeight - deltaPercent).toInt()
+                        .coerceIn(10, 90)
+                    val currentPercent = resolveKeyboardHeightPercent()
+                    // Only update if value changed significantly
+                    if (kotlin.math.abs(newPercent - currentPercent) >= 1) {
+                        if (isLandscapeOrientation) {
+                            keyboardPrefs.keyboardHeightPercentLandscape.setValue(newPercent)
+                        } else {
+                            keyboardPrefs.keyboardHeightPercent.setValue(newPercent)
+                        }
+                        updateKeyboardSize()
+                        keyboardView.post {
+                            updateAdjustingHandlePosition()
+                        }
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     v.parent?.requestDisallowInterceptTouchEvent(false)
                     v.isPressed = false
-                    keyboardWindow.updateBounds()
-                    saveFloatingPosition(
-                        keyboardView.translationX.toInt(),
-                        keyboardView.translationY.toInt()
-                    )
                     true
                 }
                 else -> false
             }
+        }
+    }
+
+    private val adjustingLeftMarginHandle = view(::View) {
+        visibility = GONE
+        setOnTouchListener { v, event ->
+            if (!isAdjustingMode) return@setOnTouchListener false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    adjustingResizeStartSidePadding = resolveKeyboardSidePadding()
+                    lastAdjustingTouchX = event.rawX
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                    v.isPressed = true
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val delta = (event.rawX - lastAdjustingTouchX).toInt()
+                    // Scale: 100px drag = 20dp padding change
+                    val deltaPadding = (delta * 0.2f).toInt()
+                    val newPadding = (adjustingResizeStartSidePadding + deltaPadding).coerceIn(0, 200)
+                    val currentPadding = resolveKeyboardSidePadding()
+                    if (newPadding != currentPadding) {
+                        if (isLandscapeOrientation) {
+                            keyboardPrefs.keyboardSidePaddingLandscape.setValue(newPadding)
+                        } else {
+                            keyboardPrefs.keyboardSidePadding.setValue(newPadding)
+                        }
+                        updateKeyboardSize()
+                        keyboardView.post {
+                            updateAdjustingHandlePosition()
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                    v.isPressed = false
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private val adjustingRightMarginHandle = view(::View) {
+        visibility = GONE
+        setOnTouchListener { v, event ->
+            if (!isAdjustingMode) return@setOnTouchListener false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    adjustingResizeStartSidePadding = resolveKeyboardSidePadding()
+                    lastAdjustingTouchX = event.rawX
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                    v.isPressed = true
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val delta = (lastAdjustingTouchX - event.rawX).toInt()
+                    // Scale: 100px drag = 20dp padding change
+                    val deltaPadding = (delta * 0.2f).toInt()
+                    val newPadding = (adjustingResizeStartSidePadding + deltaPadding).coerceIn(0, 200)
+                    val currentPadding = resolveKeyboardSidePadding()
+                    if (newPadding != currentPadding) {
+                        if (isLandscapeOrientation) {
+                            keyboardPrefs.keyboardSidePaddingLandscape.setValue(newPadding)
+                        } else {
+                            keyboardPrefs.keyboardSidePadding.setValue(newPadding)
+                        }
+                        updateKeyboardSize()
+                        keyboardView.post {
+                            updateAdjustingHandlePosition()
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                    v.isPressed = false
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+
+    // Overlay to disable keyboard input during adjusting mode
+    private val adjustingOverlay = view(::View) {
+        visibility = GONE
+        backgroundColor = android.graphics.Color.parseColor("#60000000") // Semi-transparent black
+        // Completely disable touch event handling for this view
+        isClickable = false
+        isFocusable = false
+        isFocusableInTouchMode = false
+        isDuplicateParentStateEnabled = false
+        // Important: let touch events pass through to views behind
+        filterTouchesWhenObscured = false
+        // Make sure this view doesn't consume touch events
+        setOnTouchListener { _, _ -> false }
+    }
+
+    // Adjusting mode state variables
+    private var adjustingResizeStartHeight = 0
+    private var adjustingResizeStartSidePadding = 0
+    private var adjustingResizeStartBottomPadding = 0
+    private var lastAdjustingTouchX = 0f
+    private var lastAdjustingTouchY = 0f
+    private var adjustingStartKeyboardTop = 0
+
+    private fun resolveKeyboardHeightPercent(): Int {
+        return if (isLandscapeOrientation) {
+            keyboardPrefs.keyboardHeightPercentLandscape.getValue()
+        } else {
+            keyboardPrefs.keyboardHeightPercent.getValue()
+        }
+    }
+
+    private fun resolveKeyboardSidePadding(): Int {
+        return if (isLandscapeOrientation) {
+            keyboardPrefs.keyboardSidePaddingLandscape.getValue()
+        } else {
+            keyboardPrefs.keyboardSidePadding.getValue()
+        }
+    }
+
+    private fun resolveKeyboardBottomPadding(): Int {
+        return if (isLandscapeOrientation) {
+            keyboardPrefs.keyboardBottomPaddingLandscape.getValue()
+        } else {
+            keyboardPrefs.keyboardBottomPadding.getValue()
         }
     }
 
@@ -545,6 +773,8 @@ class InputView(
         private set
     var isOneHanded = false
         private set
+    var isAdjustingMode = false
+        private set
 
     private var oneHandOnRight = true
     private var oneHandWidthPx = 0
@@ -718,12 +948,143 @@ class InputView(
         if (isFloating) {
             floatingRightHandle.visibility = VISIBLE
             floatingBottomHandle.visibility = VISIBLE
-            floatingMoveHandle.visibility = VISIBLE
+            adjustableHandle.visibility = VISIBLE
             return
         }
         floatingRightHandle.visibility = GONE
         floatingBottomHandle.visibility = GONE
-        floatingMoveHandle.visibility = GONE
+        // In adjusting mode, floatingMoveHandle is used as bottom padding adjuster
+        if (isAdjustingMode) {
+            adjustableHandle.visibility = VISIBLE
+        } else {
+            adjustableHandle.visibility = GONE
+        }
+    }
+
+    private fun updateAdjustingHandlesVisibility() {
+        if (isAdjustingMode) {
+            adjustingHeightHandle.visibility = VISIBLE
+            adjustingLeftMarginHandle.visibility = VISIBLE
+            adjustingRightMarginHandle.visibility = VISIBLE
+            adjustingOverlay.visibility = VISIBLE
+            return
+        }
+        adjustingHeightHandle.visibility = GONE
+        adjustingLeftMarginHandle.visibility = GONE
+        adjustingRightMarginHandle.visibility = GONE
+        adjustingOverlay.visibility = GONE
+    }
+
+    private fun updateAdjustingHandlePosition() {
+        if (!isAdjustingMode) return
+        // Use keyboardView which is always available
+        if (keyboardView.width <= 0 || keyboardView.height <= 0) return
+
+        val handleVisualWidth = dp(48)
+        val handleVisualHeight = dp(6)
+        val touchAreaWidth = dp(60)
+        val touchAreaHeight = dp(30)
+
+        // Height handle - horizontal bar at top edge of keyboard
+        // Touch area extends above keyboard, visual handle centered in touch area
+        adjustingHeightHandle.updateLayoutParams {
+            width = touchAreaWidth
+            height = touchAreaHeight
+        }
+        // Position using absolute coordinates relative to parent
+        // Place touch area so its center is at keyboard top edge
+        // Visual handle (centered in touch area) will appear just above keyboard
+        adjustingHeightHandle.translationX = (keyboardView.left + keyboardView.width / 2f - touchAreaWidth / 2f)
+        adjustingHeightHandle.translationY = (keyboardView.top - touchAreaHeight / 2f)
+
+        // Left/Right margin handles - positioned at the edges of visible keyboard content
+        // The visible content is windowManager.view, constrained between padding spaces
+        val marginHandleVisualHeight = dp(48)  // Changed from 80 to 48 to match height handle length
+        val marginHandleVisualWidth = dp(6)
+        val marginTouchAreaWidth = dp(30)
+        val marginTouchAreaHeight = dp(60)  // Changed from 100 to 60 to match height handle touch area
+
+        // Get the actual visible keyboard content bounds
+        // windowManager.view is the actual keyboard content area
+        // Use keyboardView.top for vertical positioning (same as height handle)
+        val contentLeft = windowManager.view.left
+        val contentRight = windowManager.view.left + windowManager.view.width
+        
+        adjustingLeftMarginHandle.updateLayoutParams {
+            width = marginTouchAreaWidth
+            height = marginTouchAreaHeight
+        }
+        // Position at the left edge of visible keyboard content
+        adjustingLeftMarginHandle.translationX = (contentLeft - marginTouchAreaWidth / 2f)
+        adjustingLeftMarginHandle.translationY = (keyboardView.top + keyboardView.height / 2f - marginTouchAreaHeight / 2f)
+
+        adjustingRightMarginHandle.updateLayoutParams {
+            width = marginTouchAreaWidth
+            height = marginTouchAreaHeight
+        }
+        // Position at the right edge of visible keyboard content
+        adjustingRightMarginHandle.translationX = (contentRight - marginTouchAreaWidth / 2f)
+        adjustingRightMarginHandle.translationY = (keyboardView.top + keyboardView.height / 2f - marginTouchAreaHeight / 2f)
+
+        // Position floatingMoveHandle (which also serves as bottom padding adjuster in adjusting mode) above kawaii bar
+        if (isAdjustingMode) {
+            val moveHandleSize = dp(24)
+            // Position above kawaii bar, centered horizontally
+            // kawaiiBar is inside keyboardView, so we need keyboardView.top + kawaiiBar.top
+            val kawaiiTopInParent = keyboardView.top + kawaiiBar.view.top
+            // Center the handle horizontally
+            adjustableHandle.translationX = (keyboardView.left + keyboardView.width / 2f - moveHandleSize / 2f)
+            // Position above kawaii bar with a gap
+            adjustableHandle.translationY = (kawaiiTopInParent - moveHandleSize - dp(8)).toFloat()
+            
+            // Update layout params for adjusting mode
+            adjustableHandle.updateLayoutParams {
+                width = moveHandleSize
+                height = moveHandleSize
+            }
+        } else if (isFloating) {
+            // In floating mode, position according to original floating logic
+            val kX = keyboardView.translationX
+            val kY = keyboardView.translationY
+            val kWidth = if (keyboardView.width > 0) keyboardView.width else resolveFloatingWidth()
+            val moveHandleSize = dp(24)
+            adjustableHandle.translationX = kX + (kWidth - moveHandleSize) / 2
+            adjustableHandle.translationY = kY - moveHandleSize - dp(8)
+            
+            // Update layout params for floating mode
+            adjustableHandle.updateLayoutParams {
+                width = moveHandleSize
+                height = moveHandleSize
+            }
+        }
+
+        // Ensure all handles are brought to front to be above the overlay
+        adjustingHeightHandle.bringToFront()
+        adjustingLeftMarginHandle.bringToFront()
+        adjustingRightMarginHandle.bringToFront()
+        // floatingMoveHandle now also serves as the bottom padding adjuster in adjusting mode
+        adjustableHandle.bringToFront()
+    }
+
+    private fun updateAdjustingOverlayVisibility() {
+        if (isAdjustingMode) {
+            adjustingOverlay.visibility = VISIBLE
+            // Disable keyboard input during adjusting mode
+            keyboardView.isEnabled = false
+            keyboardView.isClickable = false
+            keyboardView.isFocusable = false
+            // Keep overlay behind handles - don't call bringToFront on it
+            // Handles are added after overlay, so they should be on top by default
+        } else {
+            adjustingOverlay.visibility = GONE
+            keyboardView.isEnabled = true
+            keyboardView.isClickable = true
+            keyboardView.isFocusable = true
+        }
+        // Bring floating move handle to front to ensure it's visible above overlay when in adjusting mode
+        if (isAdjustingMode) {
+            adjustableHandle.bringToFront()
+        }
     }
 
     private fun updateSplitBackgroundVisibility() {
@@ -815,6 +1176,94 @@ class InputView(
         service.window.window?.decorView?.requestLayout()
     }
 
+    private fun toggleAdjustingMode() {
+        popup.dismissAll()
+        isAdjustingMode = !isAdjustingMode
+        // In adjusting mode, force non-floating state for better UX
+        if (isAdjustingMode && isFloating) {
+            saveFloatingPosition(
+                keyboardView.translationX.toInt(),
+                keyboardView.translationY.toInt()
+            )
+            isFloating = false
+            kawaiiBar.setFloatingState(false)
+            updateFloatingState()
+        }
+        updateAdjustingModeUi()
+        requestLayout()
+    }
+
+    private fun updateAdjustingModeUi() {
+        updateAdjustingHandlesVisibility()
+        updateAdjustingHandleAppearance()
+        // Update floating handles visibility to ensure floatingMoveHandle visibility is correct
+        updateFloatingHandlesVisibility()
+        // Post to ensure layout is complete before positioning handles and overlay
+        keyboardView.post {
+            updateAdjustingHandlePosition()
+            updateAdjustingOverlayVisibility()
+        }
+    }
+
+    private fun updateAdjustingHandleAppearance() {
+        val handleColor = theme.accentKeyBackgroundColor
+
+        // Visual dimensions for drawables
+        val handleVisualWidth = dp(48)
+        val handleVisualHeight = dp(6)
+        val marginVisualHeight = dp(48)  // Changed from 80 to 48 to match height handle length
+        val marginVisualWidth = dp(6)
+
+        // Height handle - horizontal bar with rounded corners, centered in touch area
+        val heightBg = GradientDrawable().apply {
+            setColor(handleColor)
+            cornerRadius = dp(3).toFloat()
+            setSize(handleVisualWidth, handleVisualHeight)
+        }
+        // Use InsetDrawable to center visual handle in larger touch area
+        // InsetDrawable params: (drawable, left, top, right, bottom)
+        val hInset = (dp(60) - handleVisualWidth) / 2
+        val vInset = (dp(30) - handleVisualHeight) / 2
+        adjustingHeightHandle.background = android.graphics.drawable.InsetDrawable(
+            heightBg,
+            hInset, vInset, hInset, vInset
+        )
+
+        // Margin handles - vertical bars with rounded corners
+        val marginBg = GradientDrawable().apply {
+            setColor(handleColor)
+            cornerRadius = dp(3).toFloat()
+            setSize(marginVisualWidth, marginVisualHeight)
+        }
+        val mHInset = (dp(30) - marginVisualWidth) / 2
+        val mVInset = (dp(60) - marginVisualHeight) / 2  // Changed from 100 to 60 to match height handle touch area
+        val marginInsetDrawable = android.graphics.drawable.InsetDrawable(
+            marginBg,
+            mHInset, mVInset, mHInset, mVInset
+        )
+        adjustingLeftMarginHandle.background = marginInsetDrawable
+        adjustingRightMarginHandle.background = android.graphics.drawable.InsetDrawable(
+            marginBg,
+            mHInset, mVInset, mHInset, mVInset
+        )
+
+        // floatingMoveHandle serves as bottom padding adjuster in adjusting mode
+        // Use the same appearance as in floating mode
+        val moveHandleSize = dp(24)
+        val moveBgDrawable = createHandleDrawable(moveHandleSize / 2f)
+        val moveIconDrawable = ContextCompat.getDrawable(context, R.drawable.ic_move_handle_cross)?.mutate()
+        val finalDrawable = if (moveIconDrawable != null) {
+            moveIconDrawable.setTint(theme.keyTextColor)
+            val inset = dp(4)
+            val ld = LayerDrawable(arrayOf(moveBgDrawable, moveIconDrawable))
+            ld.setLayerInset(1, inset, inset, inset, inset)
+            ld
+        } else {
+            moveBgDrawable
+        }
+        adjustableHandle.background = finalDrawable
+    }
+
     fun getFloatingKeyboardRegion(outRegion: Region) {
         if (!isEffectiveFloating) return
         val rect = Rect()
@@ -839,10 +1288,38 @@ class InputView(
             rect.union(handleRect)
         }
 
-        if (floatingMoveHandle.visibility == View.VISIBLE) {
+        if (adjustableHandle.visibility == View.VISIBLE) {
             val handleRect = Rect()
-            floatingMoveHandle.getHitRect(handleRect)
+            adjustableHandle.getHitRect(handleRect)
             rect.union(handleRect)
+        }
+
+        // Include adjusting mode handles if in adjusting mode (even in floating mode)
+        if (isAdjustingMode) {
+            if (adjustingHeightHandle.visibility == View.VISIBLE) {
+                val handleRect = Rect()
+                adjustingHeightHandle.getHitRect(handleRect)
+                rect.union(handleRect)
+            }
+
+            if (adjustingLeftMarginHandle.visibility == View.VISIBLE) {
+                val handleRect = Rect()
+                adjustingLeftMarginHandle.getHitRect(handleRect)
+                rect.union(handleRect)
+            }
+
+            if (adjustingRightMarginHandle.visibility == View.VISIBLE) {
+                val handleRect = Rect()
+                adjustingRightMarginHandle.getHitRect(handleRect)
+                rect.union(handleRect)
+            }
+
+            // adjustingBottomHandle has been merged with floatingMoveHandle
+            if (adjustableHandle.visibility == View.VISIBLE) {
+                val handleRect = Rect()
+                adjustableHandle.getHitRect(handleRect)
+                rect.union(handleRect)
+            }
         }
 
         // No extra inset needed now as handles provide padding and coverage
@@ -870,6 +1347,58 @@ class InputView(
                 handleLocation[1] + oneHandHandle.height
             )
             rect.union(handleRect)
+        }
+
+        // Include adjusting mode handles if in adjusting mode
+        if (isAdjustingMode) {
+            if (adjustingHeightHandle.visibility == View.VISIBLE) {
+                val handleLocation = IntArray(2)
+                adjustingHeightHandle.getLocationInWindow(handleLocation)
+                val handleRect = Rect(
+                    handleLocation[0],
+                    handleLocation[1],
+                    handleLocation[0] + adjustingHeightHandle.width,
+                    handleLocation[1] + adjustingHeightHandle.height
+                )
+                rect.union(handleRect)
+            }
+
+            if (adjustingLeftMarginHandle.visibility == View.VISIBLE) {
+                val handleLocation = IntArray(2)
+                adjustingLeftMarginHandle.getLocationInWindow(handleLocation)
+                val handleRect = Rect(
+                    handleLocation[0],
+                    handleLocation[1],
+                    handleLocation[0] + adjustingLeftMarginHandle.width,
+                    handleLocation[1] + adjustingLeftMarginHandle.height
+                )
+                rect.union(handleRect)
+            }
+
+            if (adjustingRightMarginHandle.visibility == View.VISIBLE) {
+                val handleLocation = IntArray(2)
+                adjustingRightMarginHandle.getLocationInWindow(handleLocation)
+                val handleRect = Rect(
+                    handleLocation[0],
+                    handleLocation[1],
+                    handleLocation[0] + adjustingRightMarginHandle.width,
+                    handleLocation[1] + adjustingRightMarginHandle.height
+                )
+                rect.union(handleRect)
+            }
+
+            // adjustingBottomHandle has been merged with floatingMoveHandle
+            if (adjustableHandle.visibility == View.VISIBLE) {
+                val handleLocation = IntArray(2)
+                adjustableHandle.getLocationInWindow(handleLocation)
+                val handleRect = Rect(
+                    handleLocation[0],
+                    handleLocation[1],
+                    handleLocation[0] + adjustableHandle.width,
+                    handleLocation[1] + adjustableHandle.height
+                )
+                rect.union(handleRect)
+            }
         }
 
         outRegion.set(rect)
@@ -933,6 +1462,8 @@ class InputView(
             // Reset text scale
             (windowManager.getEssentialWindow(KeyboardWindow) as? KeyboardWindow)?.setTextScale(1.0f)
         }
+        // Always update handle position to ensure appearance is set correctly
+        updateHandlePosition()
         keyboardView.layoutParams = params
         updateOneHandHandleVisibility()
         updateSplitBackgroundVisibility()
@@ -1090,7 +1621,28 @@ class InputView(
             startToStart = ConstraintLayout.LayoutParams.PARENT_ID
             topToTop = ConstraintLayout.LayoutParams.PARENT_ID
         })
-        add(floatingMoveHandle, lParams(dp(24), dp(24)) {
+        add(adjustableHandle, lParams(dp(24), dp(24)) {
+            startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+            topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+        })
+        // Initialize adjustableHandle visibility based on current state
+        updateFloatingHandlesVisibility()
+        add(adjustingOverlay, lParams(matchParent, matchParent) {
+            topToTop = keyboardView.id
+            bottomToBottom = keyboardView.id
+            startToStart = keyboardView.id
+            endToEnd = keyboardView.id
+        })
+        // Add handles constrained to parent, positioned absolutely in updateAdjustingHandlePosition
+        add(adjustingHeightHandle, lParams(dp(60), dp(30)) {
+            startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+            topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+        })
+        add(adjustingLeftMarginHandle, lParams(dp(30), dp(100)) {
+            startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+            topToTop = ConstraintLayout.LayoutParams.PARENT_ID
+        })
+        add(adjustingRightMarginHandle, lParams(dp(30), dp(100)) {
             startToStart = ConstraintLayout.LayoutParams.PARENT_ID
             topToTop = ConstraintLayout.LayoutParams.PARENT_ID
         })
@@ -1106,7 +1658,18 @@ class InputView(
         kawaiiBar.setFloatingState(isEffectiveFloating)
 
         kawaiiBar.onFloatingToggleListener = {
-            toggleFloatingMode()
+            // If currently in adjusting mode, exit adjusting mode; otherwise toggle floating mode
+            if (isAdjustingMode) {
+                toggleAdjustingMode()
+            } else {
+                toggleFloatingMode()
+            }
+        }
+        kawaiiBar.onFloatingLongPressListener = {
+            // If not in floating mode, allow entering adjusting mode
+            if (!isFloating) {
+                toggleAdjustingMode()
+            }
         }
 
         kawaiiBar.view.setOnTouchListener { v, event ->

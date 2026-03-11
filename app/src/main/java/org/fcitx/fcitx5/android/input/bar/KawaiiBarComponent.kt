@@ -91,6 +91,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private val popup: PopupComponent by manager.must()
 
     var onFloatingToggleListener: (() -> Unit)? = null
+    var onFloatingLongPressListener: (() -> Unit)? = null
 
     fun setFloatingState(isFloating: Boolean) {
         idleUi.buttonsUi.setFloatingState(isFloating)
@@ -252,6 +253,10 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                 }
                 floatingButton.setOnClickListener {
                     onFloatingToggleListener?.invoke()
+                }
+                floatingButton.setOnLongClickListener {
+                    onFloatingLongPressListener?.invoke()
+                    true
                 }
             }
             clipboardUi.suggestionView.apply {

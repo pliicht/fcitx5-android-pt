@@ -77,6 +77,14 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
 
     private val currentKeyboard: BaseKeyboard? get() = keyboards[currentKeyboardName]
 
+    /**
+     * Refresh all keyboard layouts.
+     * Call this when split keyboard settings (gap, threshold, enabled) change.
+     */
+    fun refreshAllKeyboards() {
+        keyboards.values.forEach { it.refreshStyle() }
+    }
+
     private val keyActionListener = KeyActionListener { it, source ->
         if (it is KeyAction.LayoutSwitchAction) {
             switchLayout(it.act)

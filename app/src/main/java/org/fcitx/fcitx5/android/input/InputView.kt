@@ -765,6 +765,9 @@ class InputView(
         keyboardSidePaddingLandscape,
         keyboardBottomPadding,
         keyboardBottomPaddingLandscape,
+        keyboardPrefs.splitKeyboardGapPercent,
+        keyboardPrefs.splitKeyboardThreshold,
+        keyboardPrefs.splitKeyboardEnabled,
     )
 
     var isFloating = false
@@ -1518,6 +1521,13 @@ class InputView(
             kawaiiBar.setFloatingState(isEffectiveFloating)
             updateKeyboardSize()
             service.updateFullscreenMode()
+            
+            // Refresh keyboard layout when split keyboard settings change
+            if (key == keyboardPrefs.splitKeyboardGapPercent.key ||
+                key == keyboardPrefs.splitKeyboardThreshold.key ||
+                key == keyboardPrefs.splitKeyboardEnabled.key) {
+                (windowManager.getEssentialWindow(KeyboardWindow) as? KeyboardWindow)?.refreshAllKeyboards()
+            }
         }
     }
 

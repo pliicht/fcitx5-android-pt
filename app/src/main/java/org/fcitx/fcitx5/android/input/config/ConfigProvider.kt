@@ -124,8 +124,9 @@ object ConfigProviders {
                         watchedPopupPresetFileName == popupFileName)
             ) {
                 configWatcher?.stopWatching()
+                // Use String path for API 28 compatibility (HarmonyOS 9.1.0)
                 configWatcher = object : FileObserver(
-                    configDir,
+                    dirPath,
                     CLOSE_WRITE or MODIFY or MOVED_TO or CREATE or DELETE or DELETE_SELF or MOVE_SELF
                 ) {
                     override fun onEvent(event: Int, path: String?) {
@@ -160,8 +161,9 @@ object ConfigProviders {
             val fileName = fontsetFile.name
             if (!(fontWatcher != null && watchedFontDir == dirPath && watchedFontsetFileName == fileName)) {
                 fontWatcher?.stopWatching()
+                // Use String path for API 28 compatibility (HarmonyOS 9.1.0)
                 fontWatcher = object : FileObserver(
-                    fontDir,
+                    dirPath,
                     CLOSE_WRITE or MODIFY or MOVED_TO or CREATE or DELETE or DELETE_SELF or MOVE_SELF
                 ) {
                     override fun onEvent(event: Int, path: String?) {

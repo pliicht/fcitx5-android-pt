@@ -220,6 +220,11 @@
     <string name="text_keyboard_layout_key_label_enter">Enter</string>
     <string name="text_keyboard_layout_alphabet_key_main_required">Hauptzeichen darf nicht leer sein</string>
     <string name="text_keyboard_layout_alphabet_key_alt_required">Alternatives Zeichen (Satzzeichen) darf nicht leer sein</string>
+    <string name="text_keyboard_layout_alphabet_key_main_length_invalid">Hauptzeichen muss ein einzelnes Zeichen sein</string>
+    <string name="text_keyboard_layout_alphabet_key_alt_length_invalid">Alternatives Zeichen (Satzzeichen) muss ein einzelnes Zeichen sein</string>
+    <string name="text_keyboard_layout_validation_error">Validierungsfehler</string>
+    <string name="text_keyboard_layout_display_text_mode_invalid">Bitte füllen Sie Zeile %1$d aus, bevor Sie einen neuen Modus hinzufügen</string>
+    <string name="text_keyboard_layout_display_text_mode_duplicate">Modusname "%1$s" wird bereits verwendet</string>
     <string name="cannot_resolve_text_keyboard_layout">Datei für Texttastatur-Layout kann nicht ermittelt werden</string>
     <string name="text_keyboard_layout_saved_at">TextKeyboardLayout.json gespeichert unter: %1$s</string>
 

@@ -441,6 +441,11 @@
     <string name="text_keyboard_layout_key_label_enter">Enter</string>
     <string name="text_keyboard_layout_alphabet_key_main_required">Main character must not be empty</string>
     <string name="text_keyboard_layout_alphabet_key_alt_required">Alt character must not be empty</string>
+    <string name="text_keyboard_layout_alphabet_key_main_length_invalid">Main character must be a single character</string>
+    <string name="text_keyboard_layout_alphabet_key_alt_length_invalid">Alt character must be a single character</string>
+    <string name="text_keyboard_layout_validation_error">Validation Error</string>
+    <string name="text_keyboard_layout_display_text_mode_invalid">Please fill in row %1$d before adding a new mode</string>
+    <string name="text_keyboard_layout_display_text_mode_duplicate">Mode name "%1$s" is already in use</string>
     <string name="cannot_resolve_text_keyboard_layout">Unable to resolve text keyboard layout file</string>
     <string name="text_keyboard_layout_saved_at">TextKeyboardLayout.json saved at: %1$s</string>
 </resources>

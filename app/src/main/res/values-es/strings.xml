@@ -175,6 +175,11 @@
     <string name="text_keyboard_layout_key_label_enter">Enter</string>
     <string name="text_keyboard_layout_alphabet_key_main_required">El carácter principal no debe estar vacío</string>
     <string name="text_keyboard_layout_alphabet_key_alt_required">El carácter alternativo (puntuación) no debe estar vacío</string>
+    <string name="text_keyboard_layout_alphabet_key_main_length_invalid">El carácter principal debe ser un solo carácter</string>
+    <string name="text_keyboard_layout_alphabet_key_alt_length_invalid">El carácter alternativo (puntuación) debe ser un solo carácter</string>
+    <string name="text_keyboard_layout_validation_error">Error de validación</string>
+    <string name="text_keyboard_layout_display_text_mode_invalid">Complete la fila %1$d antes de agregar un nuevo modo</string>
+    <string name="text_keyboard_layout_display_text_mode_duplicate">El nombre del modo "%1$s" ya está en uso</string>
     <string name="cannot_resolve_text_keyboard_layout">No se puede localizar el archivo de distribución del teclado de texto</string>
     <string name="text_keyboard_layout_saved_at">TextKeyboardLayout.json guardado en: %1$s</string>
 

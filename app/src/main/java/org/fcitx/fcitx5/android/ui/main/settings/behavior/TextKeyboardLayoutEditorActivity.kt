@@ -1421,8 +1421,55 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                                 gravity = Gravity.CENTER_HORIZONTAL
                                 topMargin = dp(4)
                             }
+                            var lastInvalidToastTime = 0L
                             setOnClickListener {
+                                // Capture current UI state
                                 captureModeSpecificFromUi()
+                                
+                                // Validate existing entries before adding new one
+                                val hasInvalidEntry = alphabetDisplayTextRowBindings.any { binding ->
+                                    val mode = binding.modeEdit.text?.toString().orEmpty().trim()
+                                    val value = binding.valueEdit.text?.toString().orEmpty().trim()
+                                    mode.isEmpty() || value.isEmpty()
+                                }
+                                if (hasInvalidEntry) {
+                                    // Find the first invalid row and focus it
+                                    var firstInvalidIndex = -1
+                                    for ((index, binding) in alphabetDisplayTextRowBindings.withIndex()) {
+                                        val mode = binding.modeEdit.text?.toString().orEmpty().trim()
+                                        val value = binding.valueEdit.text?.toString().orEmpty().trim()
+                                        if (mode.isEmpty() || value.isEmpty()) {
+                                            binding.modeEdit.requestFocus()
+                                            firstInvalidIndex = index
+                                            break
+                                        }
+                                    }
+                                    // Show toast only once every 2 seconds to avoid spam
+                                    val currentTime = System.currentTimeMillis()
+                                    if (currentTime - lastInvalidToastTime > 2000 && firstInvalidIndex >= 0) {
+                                        Toast.makeText(
+                                            this@TextKeyboardLayoutEditorActivity,
+                                            getString(R.string.text_keyboard_layout_display_text_mode_invalid, firstInvalidIndex + 1),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        lastInvalidToastTime = currentTime
+                                    }
+                                    return@setOnClickListener
+                                }
+                                
+                                // Check for duplicate mode names
+                                val modeNames = alphabetDisplayTextModeItems.map { it.mode.trim() }.filter { it.isNotEmpty() }
+                                val duplicateModes = modeNames.groupingBy { it }.eachCount().filter { it.value > 1 }
+                                if (duplicateModes.isNotEmpty()) {
+                                    val duplicateMode = duplicateModes.keys.first()
+                                    Toast.makeText(
+                                        this@TextKeyboardLayoutEditorActivity,
+                                        getString(R.string.text_keyboard_layout_display_text_mode_duplicate, duplicateMode),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@setOnClickListener
+                                }
+                                
                                 alphabetDisplayTextModeItems.add(DisplayTextItem("", ""))
                                 renderDisplayTextEditor()
                             }
@@ -1519,6 +1566,23 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                         ).show()
                         return@setOnClickListener
                     }
+                    // Validate main and alt are single characters
+                    if (main.length != 1) {
+                        Toast.makeText(
+                            this,
+                            getString(R.string.text_keyboard_layout_alphabet_key_main_length_invalid),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@setOnClickListener
+                    }
+                    if (alt.length != 1) {
+                        Toast.makeText(
+                            this,
+                            getString(R.string.text_keyboard_layout_alphabet_key_alt_length_invalid),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@setOnClickListener
+                    }
                 }
 
                 val newKey = mutableMapOf<String, Any?>()
@@ -1537,6 +1601,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                             alphabetDisplayTextModeItems.forEach { item ->
                                 val modeName = item.mode.trim()
                                 val modeValue = item.value.trim()
+                                // Validate and add non-empty entries
                                 if (modeName.isNotEmpty() && modeValue.isNotEmpty()) {
                                     displayTextMap[modeName] = modeValue
                                 }
@@ -1618,7 +1683,9 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
     }
 
     private fun parseWeight(text: String): Float? {
-        return text.toFloatOrNull()
+        val weight = text.toFloatOrNull()
+        // Validate weight is in valid range (0.0 to 1.0)
+        return weight?.takeIf { it in 0.0f..1.0f }
     }
 
     private fun confirmDeleteKey(rowIndex: Int, keyIndex: Int) {
@@ -2005,6 +2072,17 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             return
         }
 
+        // Validate data integrity before saving
+        val validationErrors = validateEntries()
+        if (validationErrors.isNotEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.text_keyboard_layout_validation_error)
+                .setMessage(validationErrors.joinToString("\n\n"))
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+            return
+        }
+
         val file = layoutFile ?: run {
             showToast(getString(R.string.cannot_resolve_text_keyboard_layout))
             return
@@ -2033,6 +2111,88 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         originalEntries = normalizedEntries()
         // Update save button state
         updateSaveButtonState()
+    }
+
+    private fun validateEntries(): List<String> {
+        val errors = mutableListOf<String>()
+        
+        // Check for duplicate layout names at the top level
+        val layoutNames = entries.keys.toList()
+        val duplicateLayoutNames = layoutNames.groupingBy { it }.eachCount().filter { it.value > 1 }
+        duplicateLayoutNames.forEach { (name, count) ->
+            errors.add("布局名称 \"$name\" 重复了 $count 次")
+        }
+        
+        entries.forEach { (layoutName, rows) ->
+            if (rows.isEmpty()) {
+                errors.add("布局 \"$layoutName\" 没有任何行")
+                return@forEach
+            }
+            
+            rows.forEachIndexed { rowIndex, row ->
+                if (row.isEmpty()) {
+                    errors.add("布局 \"$layoutName\" 第 ${rowIndex + 1} 行为空")
+                    return@forEachIndexed
+                }
+                
+                row.forEachIndexed { keyIndex, key ->
+                    val type = key["type"] as? String
+                    if (type == null) {
+                        errors.add("布局 \"$layoutName\" 第 ${rowIndex + 1} 行第 ${keyIndex + 1} 个键缺少 type 字段")
+                        return@forEachIndexed
+                    }
+                    
+                    when (type) {
+                        "AlphabetKey" -> {
+                            val main = key["main"] as? String
+                            val alt = key["alt"] as? String
+                            if (main.isNullOrBlank()) {
+                                errors.add("布局 \"$layoutName\" 第 ${rowIndex + 1} 行第 ${keyIndex + 1} 个键 (AlphabetKey) 缺少 main 字段")
+                            } else if (main.length != 1) {
+                                errors.add("布局 \"$layoutName\" 第 ${rowIndex + 1} 行第 ${keyIndex + 1} 个键 (AlphabetKey) 的 main 字段必须是单个字符")
+                            }
+                            if (alt.isNullOrBlank()) {
+                                errors.add("布局 \"$layoutName\" 第 ${rowIndex + 1} 行第 ${keyIndex + 1} 个键 (AlphabetKey) 缺少 alt 字段")
+                            } else if (alt.length != 1) {
+                                errors.add("布局 \"$layoutName\" 第 ${rowIndex + 1} 行第 ${keyIndex + 1} 个键 (AlphabetKey) 的 alt 字段必须是单个字符")
+                            }
+                        }
+                        "LayoutSwitchKey", "SymbolKey" -> {
+                            val label = key["label"] as? String
+                            if (label.isNullOrBlank()) {
+                                errors.add("布局 \"$layoutName\" 第 ${rowIndex + 1} 行第 ${keyIndex + 1} 个键 ($type) 缺少 label 字段")
+                            }
+                        }
+                    }
+                    
+                    // Validate weight if present
+                    key["weight"]?.let { weight ->
+                        when (weight) {
+                            is Number -> {
+                                val floatValue = weight.toFloat()
+                                if (floatValue < 0.0f || floatValue > 1.0f) {
+                                    errors.add("布局 \"$layoutName\" 第 ${rowIndex + 1} 行第 ${keyIndex + 1} 个键 ($type) 的 weight 字段必须在 0.0 到 1.0 之间")
+                                }
+                            }
+                            else -> {
+                                errors.add("布局 \"$layoutName\" 第 ${rowIndex + 1} 行第 ${keyIndex + 1} 个键 ($type) 的 weight 字段必须是数字")
+                            }
+                        }
+                    }
+                    
+                    // Check for duplicate displayText mode names
+                    (key["displayText"] as? Map<*, *>)?.let { displayText ->
+                        val modeNames = displayText.keys.filterIsInstance<String>().toList()
+                        val duplicateModes = modeNames.groupingBy { it }.eachCount().filter { it.value > 1 }
+                        duplicateModes.forEach { (mode, count) ->
+                            errors.add("布局 \"$layoutName\" 第 ${rowIndex + 1} 行第 ${keyIndex + 1} 个键 ($type) 的 displayText 中模式名称 \"$mode\" 重复了 $count 次")
+                        }
+                    }
+                }
+            }
+        }
+        
+        return errors
     }
 
     private fun convertToJsonProperty(value: Any?): JsonElement = when (value) {

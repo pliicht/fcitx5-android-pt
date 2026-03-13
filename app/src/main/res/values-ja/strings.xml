@@ -312,6 +312,11 @@
     <string name="text_keyboard_layout_key_label_enter">Enter</string>
     <string name="text_keyboard_layout_alphabet_key_main_required">メイン文字は空にできません</string>
     <string name="text_keyboard_layout_alphabet_key_alt_required">代替文字（記号）は空にできません</string>
+    <string name="text_keyboard_layout_alphabet_key_main_length_invalid">メイン文字は単一の文字である必要があります</string>
+    <string name="text_keyboard_layout_alphabet_key_alt_length_invalid">代替文字（記号）は単一の文字である必要があります</string>
+    <string name="text_keyboard_layout_validation_error">検証エラー</string>
+    <string name="text_keyboard_layout_display_text_mode_invalid">新しいモードを追加する前に、行 %1$d を入力してください</string>
+    <string name="text_keyboard_layout_display_text_mode_duplicate">モード名 "%1$s" は既に使用されています</string>
     <string name="cannot_resolve_text_keyboard_layout">テキストキーボードレイアウトファイルを解決できません</string>
     <string name="text_keyboard_layout_saved_at">TextKeyboardLayout.json を保存しました：%1$s</string>
 

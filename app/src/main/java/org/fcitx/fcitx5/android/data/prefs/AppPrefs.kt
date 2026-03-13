@@ -257,7 +257,9 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             keyboardBottomPaddingLandscape = secondary
         }
 
-        // ===== Split keyboard settings (refactored) =====
+        // ===== Split keyboard settings =====
+        // Note: Threshold and gap are managed exclusively via SplitKeyboardCalibrationActivity
+        // They are stored in Keyboard category to trigger InputView refresh when changed
         val splitKeyboardEnabled = switch(
             R.string.split_keyboard_enabled,
             "split_keyboard_enabled",
@@ -265,28 +267,9 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             R.string.split_keyboard_enabled_summary
         )
 
-        val splitKeyboardThreshold = int(
-            R.string.split_keyboard_threshold,
-            "split_keyboard_threshold",
-            470,  // Default value; intelligently set based on device type on first install
-            350,
-            700,
-            "dp",
-            R.string.split_keyboard_threshold_summary
-        ) {
-            splitKeyboardEnabled.getValue()
-        }
-
-        val splitKeyboardGapPercent = int(
-            R.string.split_keyboard_gap_percent,
-            "split_keyboard_gap_percent",
-            20,
-            5,
-            60,
-            "%"
-        ) {
-            splitKeyboardEnabled.getValue()
-        }
+        // Internal split keyboard settings (no UI, managed via calibration activity)
+        val splitKeyboardThreshold = ManagedPreference.PInt(sharedPreferences, "split_keyboard_threshold", 470).apply { register() }
+        val splitKeyboardGapPercent = ManagedPreference.PInt(sharedPreferences, "split_keyboard_gap_percent", 20).apply { register() }
 
         val horizontalCandidateStyle = enumList(
             R.string.horizontal_candidate_style,

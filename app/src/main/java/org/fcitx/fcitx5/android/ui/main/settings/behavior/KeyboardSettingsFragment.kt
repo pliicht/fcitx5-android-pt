@@ -10,11 +10,21 @@ import androidx.preference.PreferenceScreen
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceFragment
+import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceProvider
 
 class KeyboardSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance().keyboard) {
     companion object {
         private const val CALIBRATION_PREF_KEY = "split_keyboard_calibration"
-        private const val SPLIT_GAP_KEY = "split_keyboard_gap_percent"
+        private const val SPLIT_ENABLED_KEY = "split_keyboard_enabled"
+    }
+
+    private var calibrationPreference: Preference? = null
+    
+    private val onSplitEnabledChangeListener = ManagedPreferenceProvider.OnChangeListener { key ->
+        if (key == SPLIT_ENABLED_KEY) {
+            val enabled = AppPrefs.getInstance().keyboard.splitKeyboardEnabled.getValue()
+            calibrationPreference?.isEnabled = enabled
+        }
     }
 
     override fun onPreferenceUiCreated(screen: PreferenceScreen) {
@@ -49,27 +59,36 @@ class KeyboardSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
             }
         })
 
-        // Split keyboard calibration entry - placed after "Split keyboard center gap"
-        val calibrationPreference = Preference(requireContext()).apply {
+        // Split keyboard calibration entry - placed after "Enable auto split keyboard"
+        calibrationPreference = Preference(requireContext()).apply {
             key = CALIBRATION_PREF_KEY
             setTitle(R.string.split_keyboard_calibration_title)
             setSummary(R.string.split_keyboard_calibration_summary)
             isSingleLineTitle = false
             isIconSpaceReserved = false
+            isEnabled = AppPrefs.getInstance().keyboard.splitKeyboardEnabled.getValue()
             setOnPreferenceClickListener {
                 startActivity(Intent(requireContext(), SplitKeyboardCalibrationActivity::class.java))
                 true
             }
         }
 
-        // Assign stable order to existing items, then insert calibration entry after "Split keyboard center gap"
-        val gapIndex = (0 until screen.preferenceCount)
-            .firstOrNull { index -> screen.getPreference(index).key == SPLIT_GAP_KEY }
+        // Assign stable order to existing items, then insert calibration entry after "Enable auto split keyboard"
+        val enabledIndex = (0 until screen.preferenceCount)
+            .firstOrNull { index -> screen.getPreference(index).key == SPLIT_ENABLED_KEY }
         for (index in 0 until screen.preferenceCount) {
             screen.getPreference(index).order = index * 2
         }
-        calibrationPreference.order = gapIndex?.let { it * 2 + 1 } ?: Int.MAX_VALUE
+        calibrationPreference?.order = enabledIndex?.let { it * 2 + 1 } ?: Int.MAX_VALUE
 
-        screen.addPreference(calibrationPreference)
+        calibrationPreference?.let { screen.addPreference(it) }
+        
+        // Register listener to update calibration preference enabled state
+        AppPrefs.getInstance().keyboard.registerOnChangeListener(onSplitEnabledChangeListener)
+    }
+    
+    override fun onDestroy() {
+        AppPrefs.getInstance().keyboard.unregisterOnChangeListener(onSplitEnabledChangeListener)
+        super.onDestroy()
     }
 }

@@ -765,9 +765,9 @@ class InputView(
         keyboardSidePaddingLandscape,
         keyboardBottomPadding,
         keyboardBottomPaddingLandscape,
-        keyboardPrefs.splitKeyboardGapPercent,
-        keyboardPrefs.splitKeyboardThreshold,
         keyboardPrefs.splitKeyboardEnabled,
+        keyboardPrefs.splitKeyboardThreshold,
+        keyboardPrefs.splitKeyboardGapPercent,
     )
 
     var isFloating = false
@@ -802,8 +802,9 @@ class InputView(
         }
     }
 
-    // Persistent storage for floating state
+    // Persistent storage for floating state and one-handed mode
     private val internalPrefs = AppPrefs.getInstance().internal
+
     private var floatingWidthPx by internalPrefs.floatingKeyboardWidth
     private var floatingHeightPx by internalPrefs.floatingKeyboardHeight
     private var floatingXPortrait by internalPrefs.floatingKeyboardXPortrait
@@ -1521,11 +1522,11 @@ class InputView(
             kawaiiBar.setFloatingState(isEffectiveFloating)
             updateKeyboardSize()
             service.updateFullscreenMode()
-            
+
             // Refresh keyboard layout when split keyboard settings change
-            if (key == keyboardPrefs.splitKeyboardGapPercent.key ||
+            if (key == keyboardPrefs.splitKeyboardEnabled.key ||
                 key == keyboardPrefs.splitKeyboardThreshold.key ||
-                key == keyboardPrefs.splitKeyboardEnabled.key) {
+                key == keyboardPrefs.splitKeyboardGapPercent.key) {
                 (windowManager.getEssentialWindow(KeyboardWindow) as? KeyboardWindow)?.refreshAllKeyboards()
             }
         }

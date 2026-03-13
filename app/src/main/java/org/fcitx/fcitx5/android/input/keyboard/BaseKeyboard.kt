@@ -117,7 +117,7 @@ abstract class BaseKeyboard(
         removeAllViews()
         spaceKeys.clear()
         touchTarget.clear()
-        val splitKeyboard = splitKeyboardManager.shouldUseSplitKeyboard()
+        val splitKeyboard = splitKeyboardManager.shouldUseSplitKeyboard(width)
         lastSplitLandscapeState = splitKeyboard
         keyRows = keyLayout.map { row ->
             val keyViews = row.map(::createKeyView)
@@ -693,15 +693,19 @@ abstract class BaseKeyboard(
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        // Refresh device info cache for foldable inner/outer screen switch
-        splitKeyboardManager.refreshDeviceInfo()
-        
-        val currentSplit = splitKeyboardManager.shouldUseSplitKeyboard()
-        if (currentSplit != lastSplitLandscapeState) {
-            reloadLayout()
-            reapplyTextScale()
-            requestLayout()
+        super.onSizeChanged(w, h, oldw, oldh)
+
+        // Re-evaluate split keyboard when view width changes
+        if (w != oldw) {
+            val shouldSplit = splitKeyboardManager.shouldUseSplitKeyboard(w)
+            if (shouldSplit != lastSplitLandscapeState) {
+                reloadLayout()
+                reapplyTextScale()
+                onStyleRefreshFinished()
+                requestLayout()
+            }
         }
+
         val (x, y) = intArrayOf(0, 0).also { getLocationInWindow(it) }
         bounds.set(x, y, x + width, y + height)
     }

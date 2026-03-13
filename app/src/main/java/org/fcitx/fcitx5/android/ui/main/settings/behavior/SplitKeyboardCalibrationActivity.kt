@@ -26,6 +26,7 @@ import androidx.core.view.updatePadding
 import androidx.core.view.WindowCompat
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
+import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceProvider
 import org.fcitx.fcitx5.android.data.prefs.SplitKeyboardStateManager
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.core.InputMethodEntry
@@ -70,6 +71,19 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
     private var shouldEnforceLowercaseAfterRotation: Boolean = false
     private var lastOrientation: Int = Configuration.ORIENTATION_UNDEFINED
 
+    private val onKeyboardSizeChangeListener = ManagedPreferenceProvider.OnChangeListener { key ->
+        // Refresh preview when keyboard size settings change
+        if (key == keyboardPrefs.keyboardHeightPercent.key ||
+            key == keyboardPrefs.keyboardHeightPercentLandscape.key ||
+            key == keyboardPrefs.keyboardSidePadding.key ||
+            key == keyboardPrefs.keyboardSidePaddingLandscape.key ||
+            key == keyboardPrefs.splitKeyboardThreshold.key ||
+            key == keyboardPrefs.splitKeyboardGapPercent.key) {
+            updatePreview()
+            updateDeviceInfo()
+        }
+    }
+
     companion object {
         private const val DEFAULT_THRESHOLD = 470
         private const val DEFAULT_GAP = 20
@@ -96,8 +110,9 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
         ViewCompat.requestApplyInsets(toolbar)
 
         deviceInfo = DeviceInfoCollector.collect(this)
-        currentThreshold = keyboardPrefs.splitKeyboardThreshold.getValue()
-        currentGap = keyboardPrefs.splitKeyboardGapPercent.getValue()
+        // Read values via SplitKeyboardStateManager (which reads from SharedPreferences directly)
+        currentThreshold = splitKeyboardManager.getSplitKeyboardThreshold()
+        currentGap = (splitKeyboardManager.getSplitGapPercent() * 100).toInt()
         lastOrientation = resources.configuration.orientation
         refreshCurrentKeyboardWidth()
 
@@ -109,6 +124,9 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
 
         updatePreview()
         updateDeviceInfo()
+        
+        // Listen to keyboard height/size changes to update preview in real-time
+        keyboardPrefs.registerOnChangeListener(onKeyboardSizeChangeListener)
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
@@ -123,6 +141,7 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
         super.onDestroy()
         previewKeyboard?.onDetach()
         previewKeyboard = null
+        keyboardPrefs.unregisterOnChangeListener(onKeyboardSizeChangeListener)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -234,11 +253,11 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
 
         previewKeyboardContainer = FrameLayout(this).apply {
             backgroundColor = styledColor(android.R.attr.colorButtonNormal)
-            minimumHeight = dp(220)
+            minimumHeight = dp(200)
         }
         layout.addView(previewKeyboardContainer, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(240)
+            ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply {
             setMargins(dp(16), dp(8), dp(16), dp(8))
         })
@@ -259,7 +278,9 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
             onValueChanged = { value ->
                 currentThreshold = value
                 thresholdValueText.text = "$value dp"
-                updateSplitState()
+                // Update internal prefs to trigger preview keyboard reload
+                splitKeyboardManager.setSplitKeyboardThreshold(value)
+                previewKeyboard?.refreshStyle()
                 updateDeviceInfo()
             },
             valueTextProvider = { "$it dp" }
@@ -279,7 +300,9 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
             onValueChanged = { value ->
                 currentGap = value
                 gapValueText.text = "$value %"
-                previewKeyboard?.setHorizontalGapScale(value / 100f)
+                // Update internal prefs to trigger preview keyboard reload
+                splitKeyboardManager.setSplitGapPercent(value)
+                previewKeyboard?.refreshStyle()
                 updateDeviceInfo()
             },
             valueTextProvider = { "$it %" }
@@ -302,7 +325,7 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
             setOnClickListener { autoCalibrate() }
         }, LinearLayout.LayoutParams(0, dp(44)).apply {
             weight = 1f
-            setMargins(dp(8), dp(8), dp(4), dp(8))
+            setMargins(dp(16), dp(8), dp(8), dp(8))
         })
 
         buttonLayout.addView(Button(this).apply {
@@ -311,16 +334,7 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
             setOnClickListener { resetToDefaults() }
         }, LinearLayout.LayoutParams(0, dp(44)).apply {
             weight = 1f
-            setMargins(dp(4), dp(8), dp(4), dp(8))
-        })
-
-        buttonLayout.addView(Button(this).apply {
-            text = getString(R.string.split_keyboard_apply)
-            isAllCaps = false
-            setOnClickListener { applySettings() }
-        }, LinearLayout.LayoutParams(0, dp(44)).apply {
-            weight = 1f
-            setMargins(dp(4), dp(8), dp(8), dp(8))
+            setMargins(dp(8), dp(8), dp(16), dp(8))
         })
 
         layout.addView(buttonLayout, LinearLayout.LayoutParams(
@@ -412,24 +426,24 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
             val theme = ThemeManager.activeTheme
             previewKeyboardContainer.setBackgroundColor(theme.barColor)
 
+            val displayMetrics = resources.displayMetrics
+            val screenHeight = displayMetrics.heightPixels
+
+            val heightPercent = when (resources.configuration.orientation) {
+                Configuration.ORIENTATION_LANDSCAPE ->
+                    keyboardPrefs.keyboardHeightPercentLandscape.getValue()
+                else -> keyboardPrefs.keyboardHeightPercent.getValue()
+            }
+            val keyboardHeight = (screenHeight * heightPercent / 100).toInt()
+
+            val sidePaddingDp = when (resources.configuration.orientation) {
+                Configuration.ORIENTATION_LANDSCAPE ->
+                    keyboardPrefs.keyboardSidePaddingLandscape.getValue()
+                else -> keyboardPrefs.keyboardSidePadding.getValue()
+            }
+            val sidePaddingPx = (sidePaddingDp * displayMetrics.density).toInt()
+
             previewKeyboard = TextKeyboard(this, theme).apply {
-                val displayMetrics = resources.displayMetrics
-                val screenHeight = displayMetrics.heightPixels
-
-                val heightPercent = when (resources.configuration.orientation) {
-                    Configuration.ORIENTATION_LANDSCAPE ->
-                        keyboardPrefs.keyboardHeightPercentLandscape.getValue()
-                    else -> keyboardPrefs.keyboardHeightPercent.getValue()
-                }
-                val keyboardHeight = (screenHeight * heightPercent / 100).toInt()
-
-                val sidePaddingDp = when (resources.configuration.orientation) {
-                    Configuration.ORIENTATION_LANDSCAPE ->
-                        keyboardPrefs.keyboardSidePaddingLandscape.getValue()
-                    else -> keyboardPrefs.keyboardSidePadding.getValue()
-                }
-                val sidePaddingPx = (sidePaddingDp * displayMetrics.density).toInt()
-
                 val layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     keyboardHeight
@@ -448,6 +462,11 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
                     shouldEnforceLowercaseAfterRotation = false
                 }
             }
+
+            // Update container height to match keyboard height, avoiding wasted vertical space
+            previewKeyboardContainer.updateLayoutParams {
+                height = keyboardHeight
+            }
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.split_keyboard_preview_load_failed, e.message), Toast.LENGTH_SHORT).show()
         }
@@ -459,19 +478,17 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
             val screenWidthPx = displayMetrics.widthPixels
             val shouldSplitByCalibration = currentKeyboardWidth >= currentThreshold
             val targetWidthDp = if (shouldSplitByCalibration) {
-                maxOf(currentKeyboardWidth, keyboardPrefs.splitKeyboardThreshold.getValue() + 10)
+                maxOf(currentKeyboardWidth, currentThreshold + 10)
             } else {
-                minOf(currentKeyboardWidth, keyboardPrefs.splitKeyboardThreshold.getValue() - 10)
+                minOf(currentKeyboardWidth, currentThreshold - 10)
             }.coerceAtLeast(1)
 
             val simulatedKeyboardWidthPx = (targetWidthDp * displayMetrics.density).toInt()
             val simulatedSidePaddingPx = (screenWidthPx - simulatedKeyboardWidthPx) / 2
 
-            keyboard.updateLayoutParams<FrameLayout.LayoutParams> {
-                marginStart = simulatedSidePaddingPx.coerceAtLeast(0)
-                marginEnd = simulatedSidePaddingPx.coerceAtLeast(0)
-            }
-            keyboard.requestLayout()
+            // Update container padding instead of keyboard margins to avoid triggering onSizeChanged
+            // This simulates split effect without affecting keyboard's internal state
+            previewKeyboardContainer.setPadding(simulatedSidePaddingPx, 0, simulatedSidePaddingPx, 0)
         }
     }
 
@@ -564,6 +581,11 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
 
         thresholdValueText.text = "$recommended dp"
         gapValueText.text = "$recommendedGap %"
+        
+        // Save settings to trigger external keyboard refresh
+        splitKeyboardManager.setSplitKeyboardThreshold(recommended)
+        splitKeyboardManager.setSplitGapPercent(recommendedGap)
+        
         updatePreview()
         updateDeviceInfo()
 
@@ -580,27 +602,14 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
 
         thresholdValueText.text = "$DEFAULT_THRESHOLD dp"
         gapValueText.text = "$DEFAULT_GAP %"
+        
+        // Save settings to trigger external keyboard refresh
+        splitKeyboardManager.setSplitKeyboardThreshold(DEFAULT_THRESHOLD)
+        splitKeyboardManager.setSplitGapPercent(DEFAULT_GAP)
+        
         updatePreview()
         updateDeviceInfo()
 
         Toast.makeText(this, R.string.split_keyboard_reset_toast, Toast.LENGTH_SHORT).show()
-    }
-
-    private fun applySettings() {
-        keyboardPrefs.splitKeyboardThreshold.setValue(currentThreshold)
-        keyboardPrefs.splitKeyboardGapPercent.setValue(currentGap)
-
-        val appliedThreshold = keyboardPrefs.splitKeyboardThreshold.getValue()
-        val appliedGap = keyboardPrefs.splitKeyboardGapPercent.getValue()
-        val splitEnabled = keyboardPrefs.splitKeyboardEnabled.getValue()
-        val enabledTip = if (splitEnabled) "" else getString(R.string.split_keyboard_apply_note_disabled)
-
-        Toast.makeText(
-            this,
-            getString(R.string.split_keyboard_apply_toast, appliedThreshold, appliedGap, enabledTip),
-            Toast.LENGTH_SHORT
-        ).show()
-        setResult(RESULT_OK)
-        finish()
     }
 }

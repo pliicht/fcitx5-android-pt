@@ -31,6 +31,7 @@ object SmartDefaultInitializer {
 
         prefs.keyboard.splitKeyboardEnabled.setValue(enableSplit)
         prefs.keyboard.splitKeyboardThreshold.setValue(threshold)
+        prefs.keyboard.splitKeyboardGapPercent.setValue(20)
         prefs.internal.settingsInitialized.setValue(true)
 
         Log.i(

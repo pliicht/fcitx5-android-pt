@@ -100,36 +100,77 @@ class SplitKeyboardStateManager private constructor(private val context: Context
     }
 
     /**
-     * Calculate current keyboard width (dp) with orientation-aware side padding.
+     * Calculate current keyboard width (dp) based on actual screen width.
+     *
+     * This handles edge cases like:
+     * - Portrait-forced app on landscape device (narrow strip)
+     * - Multi-window / split-screen mode
      */
     fun calculateKeyboardWidthDp(): Int {
-        return DeviceInfoCollector.calculateKeyboardWidthDp(
-            context,
-            keyboardPrefs.keyboardSidePadding.getValue(),
-            keyboardPrefs.keyboardSidePaddingLandscape.getValue()
-        )
+        val displayMetrics = context.resources.displayMetrics
+        val screenWidthPx = displayMetrics.widthPixels
+        val density = displayMetrics.density
+        
+        // Calculate actual keyboard width from current screen width
+        // Use landscape side padding as default (since device is physically landscape)
+        val sidePaddingDp = keyboardPrefs.keyboardSidePaddingLandscape.getValue()
+        val sidePaddingPx = (sidePaddingDp * density).toInt()
+        val keyboardWidthPx = (screenWidthPx - sidePaddingPx * 2).coerceAtLeast(0)
+        return (keyboardWidthPx / density).toInt()
     }
 
     /**
-     * Determine whether to use split keyboard.
+     * Determine whether to use split keyboard based on view width.
+     *
+     * @param viewWidthPx The actual keyboard view width in pixels
+     * @return true if split keyboard should be used
      */
-    fun shouldUseSplitKeyboard(): Boolean {
+    fun shouldUseSplitKeyboard(viewWidthPx: Int): Boolean {
         // If switch is off → never split
         if (!keyboardPrefs.splitKeyboardEnabled.getValue()) {
             return false
         }
 
-        // If switch is on → determine based on keyboard width and threshold
-        val keyboardWidthDp = calculateKeyboardWidthDp()
-        val threshold = keyboardPrefs.splitKeyboardThreshold.getValue()
+        // Calculate keyboard width from actual view width
+        val density = context.resources.displayMetrics.density
+        val keyboardWidthDp = (viewWidthPx / density).toInt()
+        val threshold = getSplitKeyboardThreshold()
         return keyboardWidthDp >= threshold
+    }
+
+    /**
+     * Determine whether to use split keyboard (fallback without view width).
+     */
+    fun shouldUseSplitKeyboard(): Boolean {
+        return shouldUseSplitKeyboard(calculateKeyboardWidthDp())
+    }
+
+    /**
+     * Get split keyboard threshold.
+     */
+    fun getSplitKeyboardThreshold(): Int {
+        return keyboardPrefs.splitKeyboardThreshold.getValue()
+    }
+
+    /**
+     * Set split keyboard threshold.
+     */
+    fun setSplitKeyboardThreshold(threshold: Int) {
+        keyboardPrefs.splitKeyboardThreshold.setValue(threshold)
     }
 
     /**
      * Get split keyboard gap percentage.
      */
     fun getSplitGapPercent(): Float {
-        return (keyboardPrefs.splitKeyboardGapPercent.getValue().coerceIn(5, 60) / 100f)
+        return (keyboardPrefs.splitKeyboardGapPercent.getValue().coerceIn(GAP_MIN, GAP_MAX) / 100f)
+    }
+
+    /**
+     * Set split keyboard gap percentage.
+     */
+    fun setSplitGapPercent(gap: Int) {
+        keyboardPrefs.splitKeyboardGapPercent.setValue(gap.coerceIn(GAP_MIN, GAP_MAX))
     }
 
     /**
@@ -177,7 +218,11 @@ class SplitKeyboardStateManager private constructor(private val context: Context
      */
     companion object {
         private const val TAG = "SplitKeyboardState"
-        
+        private const val DEFAULT_THRESHOLD = 470
+        private const val DEFAULT_GAP = 20
+        private const val GAP_MIN = 5
+        private const val GAP_MAX = 60
+
         @Volatile
         private var instance: SplitKeyboardStateManager? = null
 

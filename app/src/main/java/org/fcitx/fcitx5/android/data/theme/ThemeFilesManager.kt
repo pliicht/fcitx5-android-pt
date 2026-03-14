@@ -46,12 +46,21 @@ object ThemeFilesManager {
         return files
             .sortedByDescending { it.lastModified() } // newest first
             .mapNotNull decode@{
-                val (theme, migrated) = runCatching {
-                    Json.decodeFromString(CustomThemeSerializer.WithMigrationStatus, it.readText())
+                val raw = it.readText()
+                // Normalize paths to this app's external files dir
+                val normalized = raw.replace(Regex("/Android/data/[^/]+/files"), "/Android/data/${appContext.packageName}/files")
+                val (theme, migratedFromSerializer) = runCatching {
+                    Json.decodeFromString(CustomThemeSerializer.WithMigrationStatus, normalized)
                 }.getOrElse { e ->
                     Timber.w("Failed to decode theme file ${it.absolutePath}: ${e.message}")
                     return@decode null
                 }
+
+                // If we changed the JSON text (normalized) or the serializer reported migration, persist the corrected JSON
+                if (normalized != raw || migratedFromSerializer) {
+                    saveThemeFiles(theme)
+                }
+
                 if (theme.backgroundImage != null) {
                     if (!File(theme.backgroundImage.croppedFilePath).exists() ||
                         !File(theme.backgroundImage.srcFilePath).exists()
@@ -60,10 +69,7 @@ object ThemeFilesManager {
                         return@decode null
                     }
                 }
-                // Update the saved file if migration happens
-                if (migrated) {
-                    saveThemeFiles(theme)
-                }
+
                 return@decode theme
             }.toMutableList()
     }
@@ -117,39 +123,67 @@ object ThemeFilesManager {
                     val extracted = zipStream.extract(tempDir)
                     val jsonFile = extracted.find { it.extension == "json" }
                         ?: errorRuntime(R.string.exception_theme_json)
+                    val rawJson = jsonFile.readText()
+                    // Normalize paths to this app's external files dir
+                    val normalizedJson = rawJson.replace(Regex("/Android/data/[^/]+/files"), "/Android/data/${appContext.packageName}/files")
                     val (decoded, migrated) = Json.decodeFromString(
                         CustomThemeSerializer.WithMigrationStatus,
-                        jsonFile.readText()
+                        normalizedJson
                     )
                     if (ThemeManager.BuiltinThemes.find { it.name == decoded.name } != null)
                         errorRuntime(R.string.exception_theme_name_clash)
                     val oldTheme = ThemeManager.getTheme(decoded.name) as? Theme.Custom
                     val newCreated = oldTheme == null
                     val newTheme = if (decoded.backgroundImage != null) {
-                        val srcFile = File(dir, decoded.backgroundImage.srcFilePath)
+                        val appFilesDir = appContext.getExternalFilesDir(null)!!
+
+                        // Resolve target paths: use JSON path if already in this app, otherwise preserve path after /files/
+                        val srcTarget = run {
+                            val jsonPath = decoded.backgroundImage.srcFilePath
+                            if (jsonPath.startsWith(appFilesDir.absolutePath)) {
+                                File(jsonPath)
+                            } else {
+                                val rel = jsonPath.substringAfter("/files/").trimStart('/')
+                                File(appFilesDir, rel)
+                            }
+                        }
+
+                        val croppedTarget = run {
+                            val jsonPath = decoded.backgroundImage.croppedFilePath
+                            if (jsonPath.startsWith(appFilesDir.absolutePath)) {
+                                File(jsonPath)
+                            } else {
+                                val rel = jsonPath.substringAfter("/files/").trimStart('/')
+                                File(appFilesDir, rel)
+                            }
+                        }
+
+                        srcTarget.parentFile?.mkdirs()
+                        croppedTarget.parentFile?.mkdirs()
+
                         val oldSrcFile = oldTheme?.backgroundImage?.srcFilePath?.let { File(it) }
-                        val srcFileNameMatches = oldSrcFile?.name == srcFile.name
-                        extracted.find { it.name == srcFile.name }
-                            // allow overwriting background image files when theme and file names all are same
-                            ?.copyTo(srcFile, overwrite = srcFileNameMatches)
+                        val srcFileNameMatches = oldSrcFile?.name == srcTarget.name
+                        extracted.find { it.name == srcTarget.name }
+                            ?.copyTo(srcTarget, overwrite = srcFileNameMatches)
                             ?: errorRuntime(R.string.exception_theme_src_image)
-                        val croppedFile = File(dir, decoded.backgroundImage.croppedFilePath)
-                        val oldCroppedFile =
-                            oldTheme?.backgroundImage?.croppedFilePath?.let { File(it) }
-                        val croppedFileNameMatches = oldCroppedFile?.name == croppedFile.name
-                        extracted.find { it.name == croppedFile.name }
-                            ?.copyTo(croppedFile, overwrite = croppedFileNameMatches)
+
+                        val oldCroppedFile = oldTheme?.backgroundImage?.croppedFilePath?.let { File(it) }
+                        val croppedFileNameMatches = oldCroppedFile?.name == croppedTarget.name
+                        extracted.find { it.name == croppedTarget.name }
+                            ?.copyTo(croppedTarget, overwrite = croppedFileNameMatches)
                             ?: errorRuntime(R.string.exception_theme_cropped_image)
+
                         if (!srcFileNameMatches) {
                             oldSrcFile?.delete()
                         }
                         if (!croppedFileNameMatches) {
                             oldCroppedFile?.delete()
                         }
+
                         decoded.copy(
                             backgroundImage = decoded.backgroundImage.copy(
-                                croppedFilePath = croppedFile.path,
-                                srcFilePath = srcFile.path
+                                croppedFilePath = croppedTarget.path,
+                                srcFilePath = srcTarget.path
                             )
                         )
                     } else {

@@ -10,9 +10,12 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.shapes.OvalShape
 import android.os.Build
+import android.graphics.Color
+import android.view.Gravity
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.core.view.isVisible
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.theme.Theme
@@ -32,7 +35,9 @@ import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.imageView
 import splitties.views.dsl.core.matchParent
+import splitties.views.dsl.core.textView
 import splitties.views.dsl.core.view
+import splitties.views.dsl.core.wrapContent
 import splitties.views.imageDrawable
 import splitties.views.imageResource
 import splitties.views.setPaddingDp
@@ -46,6 +51,16 @@ class ThemeThumbnailUi(override val ctx: Context) : Ui {
     }
 
     val bar = view(::View)
+
+    val themeNameText = textView {
+        textSize = 14f
+        maxLines = 1
+        ellipsize = android.text.TextUtils.TruncateAt.END
+        gravity = Gravity.CENTER
+        isClickable = false
+        isFocusable = false
+        setPaddingDp(8, 4, 8, 4)
+    }
 
     val spaceBar = view(::View)
 
@@ -67,11 +82,14 @@ class ThemeThumbnailUi(override val ctx: Context) : Ui {
         imageResource = R.drawable.ic_baseline_auto_awesome_24
     }
 
-    override val root = constraintLayout {
+    val thumbnailView = constraintLayout {
         outlineProvider = ViewOutlineProvider.BOUNDS
         elevation = dp(2f)
         add(bkg, lParams(matchParent, matchParent))
         add(bar, lParams(matchParent, dp(14)))
+        add(themeNameText, lParams(matchParent, wrapContent) {
+            centerInParent()
+        })
         add(spaceBar, lParams(height = dp(10)) {
             centerHorizontally()
             bottomOfParent(dp(6))
@@ -94,12 +112,19 @@ class ThemeThumbnailUi(override val ctx: Context) : Ui {
         })
     }
 
+    override val root = thumbnailView
+
     fun setTheme(theme: Theme) {
         root.apply {
             foreground = rippleDrawable(theme.keyPressHighlightColor)
         }
         bkg.imageDrawable = theme.backgroundDrawable()
         bar.backgroundColor = theme.barColor
+        themeNameText.apply {
+            text = formatThemeName(theme.name)
+            // Use theme's key text color to ensure visibility on background
+            setTextColor(theme.keyTextColor)
+        }
         spaceBar.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = ctx.dp(2f)
@@ -120,6 +145,15 @@ class ThemeThumbnailUi(override val ctx: Context) : Ui {
             imageTintList = foregroundTint
         }
         checkMark.imageTintList = foregroundTint
+    }
+
+    private fun formatThemeName(name: String): String {
+        // Truncate UUID to first 8 characters for display
+        return if (name.length == 36 && name.count { it == '-' } == 4) {
+            name.take(8)
+        } else {
+            name
+        }
     }
 
     fun setChecked(checked: Boolean) {

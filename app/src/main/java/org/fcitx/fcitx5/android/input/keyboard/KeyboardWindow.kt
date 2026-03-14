@@ -85,6 +85,16 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
         keyboards.values.forEach { it.refreshStyle() }
     }
 
+    /**
+     * Check and apply font refresh if needed.
+     * Call this when keyboard is about to show.
+     */
+    fun checkAndApplyFontRefresh() {
+        if (org.fcitx.fcitx5.android.input.font.FontProviders.checkAndClearRefreshFlag()) {
+            refreshAllKeyboards()
+        }
+    }
+
     private val keyActionListener = KeyActionListener { it, source ->
         if (it is KeyAction.LayoutSwitchAction) {
             switchLayout(it.act)

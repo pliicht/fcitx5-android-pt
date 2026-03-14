@@ -396,10 +396,7 @@ class FontsetEditorActivity : AppCompatActivity() {
         // allow saving empty fontset (means use system default fonts)
         org.fcitx.fcitx5.android.input.config.ConfigProviders.provider.writeFontsetPathMap(nonEmptyMap)
             .onSuccess { file ->
-            org.fcitx.fcitx5.android.input.font.FontProviders.clearCache()
-            AutoScaleTextView.refreshAllFontTypeFaces()
-            CandidateAutoScaleTextView.refreshAllFontTypeFaces()
-            // notify fcitx to reload config so input windows (keyboard) refresh style
+            FontProviders.markNeedsRefresh()
             FcitxDaemon.getFirstConnectionOrNull()?.runIfReady {
                 reloadConfig()
             }

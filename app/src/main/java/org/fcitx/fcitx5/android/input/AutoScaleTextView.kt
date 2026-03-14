@@ -19,7 +19,6 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import android.graphics.Typeface
-import java.lang.ref.WeakReference
 import org.fcitx.fcitx5.android.input.font.FontProviders
 
 @SuppressLint("AppCompatCustomView")
@@ -58,37 +57,12 @@ class AutoScaleTextView @JvmOverloads constructor(
     private var textScaleY = 1.0f
 
     companion object {
-        private val attachedViews = mutableListOf<WeakReference<AutoScaleTextView>>()
-
-        @Synchronized
-        private fun registerView(view: AutoScaleTextView) {
-            attachedViews.removeAll { it.get() == null || it.get() === view }
-            attachedViews.add(WeakReference(view))
-        }
-
-        @Synchronized
-        private fun unregisterView(view: AutoScaleTextView) {
-            attachedViews.removeAll { it.get() == null || it.get() === view }
-        }
-
         fun clearFontCache() {
             FontProviders.clearCache()
         }
 
-        @Synchronized
-        fun refreshAllFontTypeFaces() {
-            val living = attachedViews.mapNotNull { it.get() }
-            attachedViews.removeAll { it.get() == null }
-            living.forEach { view ->
-                view.setFontTypeFace(view.fontTypeFaceKey)
-                view.requestLayout()
-                view.invalidate()
-            }
-        }
-
         val fontTypefaceMap: MutableMap<String, Typeface?>
-            @Synchronized
-                get() = FontProviders.fontTypefaceMap
+            get() = FontProviders.fontTypefaceMap
     }
 
     fun setFontTypeFace(key: String) {
@@ -104,11 +78,9 @@ class AutoScaleTextView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        registerView(this)
     }
 
     override fun onDetachedFromWindow() {
-        unregisterView(this)
         super.onDetachedFromWindow()
     }
 

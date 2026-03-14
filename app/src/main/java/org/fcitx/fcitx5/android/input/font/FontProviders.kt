@@ -4,10 +4,6 @@
 package org.fcitx.fcitx5.android.input.font
 
 import android.graphics.Typeface
-import android.os.Handler
-import android.os.Looper
-import org.fcitx.fcitx5.android.input.AutoScaleTextView
-import org.fcitx.fcitx5.android.input.candidates.CandidateAutoScaleTextView
 import org.fcitx.fcitx5.android.input.config.ConfigProviders
 
 interface FontProviderApi {
@@ -16,50 +12,48 @@ interface FontProviderApi {
 }
 
 object FontProviders {
-    // default provider is an instance of `DefaultFontProvider`
     @Volatile
     var provider: FontProviderApi = DefaultFontProvider()
 
     @Volatile
-    private var listenerRegistered = false
+    private var needsRefresh = false
 
-    @Volatile
-    private var needsAttachRefresh: Boolean = true
+    init {
+        ensureListenerRegistered()
+    }
 
-    private val mainHandler = Handler(Looper.getMainLooper())
-
-    private fun dispatchRefreshAllViews() {
-        mainHandler.post {
-            AutoScaleTextView.refreshAllFontTypeFaces()
-            CandidateAutoScaleTextView.refreshAllFontTypeFaces()
+    private fun ensureListenerRegistered() {
+        ConfigProviders.addFontsetListener {
+            handleFontsetChanged()
         }
     }
 
     private fun handleFontsetChanged() {
         provider.clearCache()
-        needsAttachRefresh = true
-        dispatchRefreshAllViews()
+        needsRefresh = true
     }
 
-    @Synchronized
-    private fun ensureListenerRegistered() {
-        if (listenerRegistered) return
-        ConfigProviders.addFontsetListener {
-            handleFontsetChanged()
-        }
-        listenerRegistered = true
+    /**
+     * Mark refresh needed after saving fontset in settings.
+     */
+    fun markNeedsRefresh() {
+        provider.clearCache()
+        needsRefresh = true
     }
 
-    fun refreshIfNeededOnAttach() {
-        ensureListenerRegistered()
-        if (!needsAttachRefresh) return
-        needsAttachRefresh = false
-        dispatchRefreshAllViews()
+    /**
+     * Check and clear refresh flag. Call when keyboard loads.
+     * @return true if font changed and keyboard needs refresh
+     */
+    fun checkAndClearRefreshFlag(): Boolean {
+        if (!needsRefresh) return false
+        needsRefresh = false
+        return true
     }
 
     fun clearCache() {
         provider.clearCache()
-        needsAttachRefresh = true
+        needsRefresh = true
     }
 
     val fontTypefaceMap: MutableMap<String, Typeface?>

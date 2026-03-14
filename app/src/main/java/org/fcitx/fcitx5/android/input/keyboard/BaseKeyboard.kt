@@ -851,7 +851,6 @@ abstract class BaseKeyboard(
     }
 
     open fun onAttach() {
-        FontProviders.refreshIfNeededOnAttach()
     }
 
     open fun onReturnDrawableUpdate(@DrawableRes returnDrawable: Int) {

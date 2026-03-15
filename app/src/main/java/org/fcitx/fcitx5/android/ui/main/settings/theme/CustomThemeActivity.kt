@@ -8,19 +8,34 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Parcelable
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-// android.view.ViewGroup (imported earlier)
+import android.view.ViewGroup
 import android.webkit.MimeTypeMap
+import android.widget.Button
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.GridLayout
+import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.TextView
+import android.widget.LinearLayout.LayoutParams
+import android.widget.SeekBar.OnSeekBarChangeListener
 import androidx.activity.addCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
@@ -67,23 +82,11 @@ import splitties.views.dsl.constraintlayout.packed
 import splitties.views.dsl.constraintlayout.startOfParent
 import splitties.views.dsl.constraintlayout.topOfParent
 import splitties.views.dsl.constraintlayout.topToTopOf
-import splitties.views.dsl.core.verticalLayout
-import android.graphics.Color
-import android.widget.EditText
-import android.text.Editable
-import android.text.TextWatcher
-import android.graphics.drawable.GradientDrawable
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.matchParent
-import splitties.views.dsl.core.lParams
-import android.widget.GridLayout
-import android.view.ViewGroup
-import android.widget.Button
-import android.widget.SeekBar.OnSeekBarChangeListener
-import android.widget.SeekBar as AndroidSeekBar
-import android.widget.TextView
 import splitties.views.dsl.core.seekBar
 import splitties.views.dsl.core.textView
+import splitties.views.dsl.core.verticalLayout
 import splitties.views.dsl.core.view
 import splitties.views.dsl.core.wrapContent
 import splitties.views.dsl.core.wrapInScrollView
@@ -123,6 +126,7 @@ class CustomThemeActivity : AppCompatActivity() {
     }
 
     private lateinit var previewUi: KeyboardPreviewUi
+    private var previewScale = 1f
 
     private fun createTextView(@StringRes string: Int? = null, ripple: Boolean = false) = textView {
         if (string != null) {
@@ -201,6 +205,47 @@ class CustomThemeActivity : AppCompatActivity() {
         updateSupplementColorPreview(themeForPreview)
     }
 
+    private fun updatePreviewScale() {
+        if (!::previewUi.isInitialized) return
+        val contentHeight = ui.height - toolbar.height
+        val currentHeight = previewUi.intrinsicHeight
+        if (contentHeight <= 0 || currentHeight <= 0 || previewScale <= 0f) return
+        val baseHeight = (currentHeight / previewScale).toInt().coerceAtLeast(1)
+        val maxPreviewHeight = (contentHeight * 0.36f).toInt().coerceAtLeast(dp(140))
+        val newScale = (maxPreviewHeight.toFloat() / baseHeight).coerceIn(0.35f, 1f)
+        if (kotlin.math.abs(newScale - previewScale) < 0.01f) return
+        previewScale = newScale
+        previewUi.setSizeScale(previewScale)
+    }
+
+    private var layoutChangeJob: android.view.Choreographer.FrameCallback? = null
+    private fun registerLayoutChangeObserver() {
+        val observer = object : android.view.Choreographer.FrameCallback {
+            private var lastWidth = 0
+            private var lastHeight = 0
+            
+            override fun doFrame(frameTimeNanos: Long) {
+                val w = ui.width
+                val h = ui.height
+                if (w != lastWidth || h != lastHeight) {
+                    lastWidth = w
+                    lastHeight = h
+                    updatePreviewScale()
+                }
+                android.view.Choreographer.getInstance().postFrameCallback(this)
+            }
+        }
+        layoutChangeJob = observer
+        android.view.Choreographer.getInstance().postFrameCallback(observer)
+    }
+    
+    private fun unregisterLayoutChangeObserver() {
+        layoutChangeJob?.let {
+            android.view.Choreographer.getInstance().removeFrameCallback(it)
+        }
+        layoutChangeJob = null
+    }
+
     private fun findInlineEditorIndex(parent: ViewGroup): Int {
         for (i in 0 until parent.childCount) {
             if (parent.getChildAt(i).tag == INLINE_COLOR_EDITOR_TAG) return i
@@ -231,177 +276,194 @@ class CustomThemeActivity : AppCompatActivity() {
         onCancel: () -> Unit
     ): View {
         var editingColor = initialColor
-        return android.widget.LinearLayout(this).apply {
-            tag = INLINE_COLOR_EDITOR_TAG
-            orientation = android.widget.LinearLayout.VERTICAL
-            val pad = dp(8)
-            setPadding(pad, pad, pad, pad)
+        var currentHue = 0f
+        var currentSaturation = 1f
+        var currentValue = 1f
+        
+        // Initialize HSV values
+        val hsv = FloatArray(3)
+        Color.colorToHSV(initialColor, hsv)
+        currentHue = hsv[0]
+        currentSaturation = hsv[1]
+        currentValue = hsv[2]
+        
+        // Local function to update color from HSV
+        fun updateColor() {
+            val color = Color.HSVToColor(Color.alpha(editingColor), floatArrayOf(currentHue, currentSaturation, currentValue))
+            editingColor = color
+        }
+        
+        // Forward references for cross-component access
+        var svPickerRef: SaturationValuePickerView? = null
+        var argbInputRef: EditText? = null
+        var alphaPreviewRef: AlphaPreviewSlider? = null
+        var hueSliderRef: HueSliderView? = null
+        var internalTextUpdate = false
 
-            val colorPreview = View(this@CustomThemeActivity).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(4f)
-                    setColor(editingColor)
+        fun syncColorWidgets(syncInputText: Boolean) {
+            alphaPreviewRef?.setColor(editingColor)
+            alphaPreviewRef?.setAlpha(Color.alpha(editingColor))
+            if (syncInputText) {
+                val text = formatArgbHex(editingColor)
+                if (argbInputRef?.text?.toString() != text) {
+                    internalTextUpdate = true
+                    argbInputRef?.setText(text)
+                    argbInputRef?.setSelection(text.length)
+                    internalTextUpdate = false
                 }
-                minimumHeight = dp(36)
-            }
-            val checkerPreviewContainer = android.widget.FrameLayout(this@CustomThemeActivity).apply {
-                background = createCheckerboardDrawable(dp(6))
-                val checkerPadding = dp(4)
-                setPadding(checkerPadding, checkerPadding, checkerPadding, checkerPadding)
-                addView(
-                    colorPreview,
-                    android.widget.FrameLayout.LayoutParams(
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                        dp(36)
-                    )
-                )
-            }
-            addView(
-                checkerPreviewContainer,
-                android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, dp(44))
-            )
-
-            val hexInput = EditText(this@CustomThemeActivity).apply {
-                setText(formatArgbHex(editingColor))
-                isSingleLine = true
-                setSelectAllOnFocus(true)
-                setTextAppearance(android.R.style.TextAppearance_Material_Body1)
-                horizontalPadding = dp(6)
-            }
-            addView(
-                hexInput,
-                android.widget.LinearLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-            )
-
-            val aSeek = AndroidSeekBar(this@CustomThemeActivity).apply {
-                max = 255
-                progress = Color.alpha(editingColor)
-            }
-            val rSeek = AndroidSeekBar(this@CustomThemeActivity).apply {
-                max = 255
-                progress = Color.red(editingColor)
-            }
-            val gSeek = AndroidSeekBar(this@CustomThemeActivity).apply {
-                max = 255
-                progress = Color.green(editingColor)
-            }
-            val bSeek = AndroidSeekBar(this@CustomThemeActivity).apply {
-                max = 255
-                progress = Color.blue(editingColor)
-            }
-
-            fun addRow(labelText: String, seek: AndroidSeekBar) {
-                val row = android.widget.LinearLayout(this@CustomThemeActivity).apply {
-                    orientation = android.widget.LinearLayout.HORIZONTAL
-                    val lbl = TextView(this@CustomThemeActivity).apply {
-                        text = labelText
-                        layoutParams = android.widget.LinearLayout.LayoutParams(
-                            dp(36),
-                            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                        )
-                    }
-                    addView(lbl)
-                    val sp = android.widget.LinearLayout.LayoutParams(
-                        0,
-                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                    ).apply { weight = 1f }
-                    seek.layoutParams = sp
-                    addView(seek)
-                    val innerPad = dp(6)
-                    setPadding(0, innerPad, 0, innerPad)
-                    minimumHeight = dp(40)
-                }
-                val lp = android.widget.LinearLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = dp(6) }
-                addView(row, lp)
-            }
-
-            addRow("A", aSeek)
-            addRow("R", rSeek)
-            addRow("G", gSeek)
-            addRow("B", bSeek)
-
-            val btnRow = android.widget.LinearLayout(this@CustomThemeActivity).apply {
-                orientation = android.widget.LinearLayout.HORIZONTAL
-            }
-            val ok = Button(this@CustomThemeActivity).apply { text = getString(android.R.string.ok) }
-            val cancel = Button(this@CustomThemeActivity).apply { text = getString(android.R.string.cancel) }
-            val spacer = View(this@CustomThemeActivity)
-            val spLp = android.widget.LinearLayout.LayoutParams(
-                0,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { weight = 1f }
-            btnRow.addView(spacer, spLp)
-            btnRow.addView(cancel)
-            btnRow.addView(ok)
-            addView(
-                btnRow,
-                android.widget.LinearLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-            )
-
-            var suppressTextChange = false
-            val liveListener = object : OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: AndroidSeekBar?, progress: Int, fromUser: Boolean) {
-                    editingColor = Color.argb(aSeek.progress, rSeek.progress, gSeek.progress, bSeek.progress)
-                    (colorPreview.background as GradientDrawable).setColor(editingColor)
-                    if (!suppressTextChange) {
-                        suppressTextChange = true
-                        val hex = formatArgbHex(editingColor)
-                        hexInput.setText(hex)
-                        hexInput.setSelection(hex.length)
-                        suppressTextChange = false
-                    }
-                    onPreview(editingColor)
-                }
-
-                override fun onStartTrackingTouch(seekBar: AndroidSeekBar?) {}
-                override fun onStopTrackingTouch(seekBar: AndroidSeekBar?) {}
-            }
-
-            aSeek.setOnSeekBarChangeListener(liveListener)
-            rSeek.setOnSeekBarChangeListener(liveListener)
-            gSeek.setOnSeekBarChangeListener(liveListener)
-            bSeek.setOnSeekBarChangeListener(liveListener)
-
-            hexInput.addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                    if (suppressTextChange) return
-                    val parsed = parseArgbHex((s ?: "").toString()) ?: return
-                    suppressTextChange = true
-                    aSeek.progress = Color.alpha(parsed)
-                    rSeek.progress = Color.red(parsed)
-                    gSeek.progress = Color.green(parsed)
-                    bSeek.progress = Color.blue(parsed)
-                    suppressTextChange = false
-                    editingColor = parsed
-                    (colorPreview.background as GradientDrawable).setColor(editingColor)
-                    onPreview(editingColor)
-                }
-
-                override fun afterTextChanged(s: Editable?) {}
-            })
-
-            ok.setOnClickListener {
-                onConfirm(editingColor)
-                (parent as? ViewGroup)?.removeView(this)
-            }
-
-            cancel.setOnClickListener {
-                onCancel()
-                (parent as? ViewGroup)?.removeView(this)
             }
         }
+        
+        lateinit var editorView: LinearLayout
+        val removeEditorView = { (editorView.parent as? ViewGroup)?.removeView(editorView) }
+
+        // Create the main editor view
+        editorView = LinearLayout(this).apply {
+            tag = INLINE_COLOR_EDITOR_TAG
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            backgroundColor = styledColor(android.R.attr.colorBackground)
+
+            // ========== 1. Saturation/Value Picker + Hue Slider ==========
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+
+                // Saturation/Value picker (square)
+                val svPicker = SaturationValuePickerView(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(dp(180), dp(180))
+                    setSaturation(currentSaturation)
+                    setValue(currentValue)
+                    setHue(currentHue)
+                    onColorChanged = { s, v ->
+                        currentSaturation = s
+                        currentValue = v
+                        updateColor()
+                        syncColorWidgets(syncInputText = true)
+                        onPreview(editingColor)
+                    }
+                }
+                svPickerRef = svPicker
+                addView(svPicker)
+
+                val hueSlider = HueSliderView(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(dp(28), dp(180)).apply {
+                        marginStart = dp(12)
+                    }
+                    setHue(currentHue)
+                    onHueChanged = { hue ->
+                        currentHue = hue
+                        svPickerRef?.setHue(currentHue)
+                        updateColor()
+                        syncColorWidgets(syncInputText = true)
+                        onPreview(editingColor)
+                    }
+                }
+                hueSliderRef = hueSlider
+                addView(hueSlider)
+
+                val alphaPreview = AlphaPreviewSlider(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(dp(28), dp(180)).apply {
+                        marginStart = dp(12)
+                    }
+                    orientation = AlphaPreviewSlider.Orientation.Vertical
+                    setAlpha(Color.alpha(editingColor))
+                    setColor(editingColor)
+                    onAlphaChanged = { alpha ->
+                        editingColor = Color.argb(
+                            alpha,
+                            Color.red(editingColor),
+                            Color.green(editingColor),
+                            Color.blue(editingColor)
+                        )
+                        syncColorWidgets(syncInputText = true)
+                        onPreview(editingColor)
+                    }
+                }
+                alphaPreviewRef = alphaPreview
+                addView(alphaPreview)
+            })
+
+            // ========== 2. ARGB Input (single) ==========
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(8), 0, dp(8))
+
+                addView(TextView(context).apply {
+                    text = "ARGB:"
+                    textSize = 14f
+                    layoutParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                    setTextColor(styledColor(android.R.attr.textColorPrimary))
+                })
+                
+                val argbInput = EditText(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+                    isSingleLine = true
+                    setText(formatArgbHex(editingColor))
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT
+                    setTextColor(styledColor(android.R.attr.textColorPrimary))
+                    setHintTextColor(styledColor(android.R.attr.textColorHint))
+                    backgroundTintList = ColorStateList.valueOf(styledColor(android.R.attr.colorControlActivated))
+                    addTextChangedListener(object : android.text.TextWatcher {
+                        override fun afterTextChanged(s: android.text.Editable?) {
+                            if (internalTextUpdate) return
+                            parseArgbHex(s.toString())?.let { color ->
+                                editingColor = color
+                                val hsv = FloatArray(3)
+                                Color.colorToHSV(editingColor, hsv)
+                                currentHue = hsv[0]
+                                currentSaturation = hsv[1]
+                                currentValue = hsv[2]
+                                svPickerRef?.setHue(currentHue)
+                                hueSliderRef?.setHue(currentHue)
+                                svPickerRef?.setSaturation(currentSaturation)
+                                svPickerRef?.setValue(currentValue)
+                                syncColorWidgets(syncInputText = false)
+                                onPreview(editingColor)
+                            }
+                        }
+                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                    })
+                }
+                argbInputRef = argbInput
+                addView(argbInput)
+            })
+
+            // ========== 3. OK/Cancel Buttons ==========
+            val buttonRow = LinearLayout(this@CustomThemeActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, dp(8), 0, 0)
+                gravity = Gravity.CENTER
+
+                addView(Button(this@CustomThemeActivity).apply {
+                    text = "确定"
+                    layoutParams = LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+                    setOnClickListener {
+                        onConfirm(editingColor)
+                        removeEditorView()
+                    }
+                })
+
+                addView(View(this@CustomThemeActivity).apply {
+                    layoutParams = LinearLayout.LayoutParams(dp(16), 1)
+                })
+
+                addView(Button(this@CustomThemeActivity).apply {
+                    text = "取消"
+                    layoutParams = LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+                    setOnClickListener {
+                        onCancel()
+                        removeEditorView()
+                    }
+                })
+            }
+            addView(buttonRow)
+        }
+        
+        return editorView
     }
 
     private val variantLabel by lazy {
@@ -527,6 +589,7 @@ class CustomThemeActivity : AppCompatActivity() {
                 Triple("Generic Active Background", { t: Theme.Custom -> t.genericActiveBackgroundColor }, { t: Theme.Custom, c: Int -> t.copy(genericActiveBackgroundColor = c) }),
                 Triple("Generic Active Foreground", { t: Theme.Custom -> t.genericActiveForegroundColor }, { t: Theme.Custom, c: Int -> t.copy(genericActiveForegroundColor = c) })
             )
+            var inlinePreviewDirty = false
 
             for (item in colorItems) {
                 val label = createTextView(null, ripple = true).apply {
@@ -547,33 +610,53 @@ class CustomThemeActivity : AppCompatActivity() {
                     if (existingEditorIndex >= 0) {
                         if (existingEditorIndex == insertIndex) {
                             parent.removeViewAt(existingEditorIndex)
-                            applyThemePreview(theme)
+                            if (inlinePreviewDirty) {
+                                applyThemePreview(theme)
+                                inlinePreviewDirty = false
+                            }
                             return@setOnClickListener
                         }
                         parent.removeViewAt(existingEditorIndex)
-                        applyThemePreview(theme)
+                        if (inlinePreviewDirty) {
+                            applyThemePreview(theme)
+                            inlinePreviewDirty = false
+                        }
                         insertIndex = parent.indexOfChild(label) + 1
                     }
 
                     val originalTheme = theme
+                    val originalColor = item.second(originalTheme)
                     val editor = createInlineColorEditor(
-                        initialColor = item.second(originalTheme),
+                        initialColor = originalColor,
                         onPreview = { c ->
-                            val tmpTheme = item.third(originalTheme, c)
-                            applyThemePreview(tmpTheme, currentBackgroundDrawable(originalTheme))
+                            val changed = c != originalColor
+                            if (changed) {
+                                inlinePreviewDirty = true
+                                val tmpTheme = item.third(originalTheme, c)
+                                applyThemePreview(tmpTheme, currentBackgroundDrawable(originalTheme))
+                            } else if (inlinePreviewDirty) {
+                                inlinePreviewDirty = false
+                                applyThemePreview(theme)
+                            }
                         },
                         onConfirm = { c ->
-                            theme = item.third(originalTheme, c)
-                            preview.setColor(c)
-                            applyThemePreview(theme)
+                            if (c != originalColor) {
+                                theme = item.third(originalTheme, c)
+                                preview.setColor(c)
+                                applyThemePreview(theme)
+                            }
+                            inlinePreviewDirty = false
                         },
                         onCancel = {
-                            applyThemePreview(theme)
+                            if (inlinePreviewDirty) {
+                                applyThemePreview(theme)
+                                inlinePreviewDirty = false
+                            }
                         }
                     )
                     parent.addView(editor, insertIndex)
                 }
-                add(label, lParams(matchParent, lineHeight))
+                add(label, android.widget.LinearLayout.LayoutParams(matchParent, lineHeight))
             }
         }
 
@@ -626,12 +709,17 @@ class CustomThemeActivity : AppCompatActivity() {
                 topOfParent()
                 centerHorizontally()
             })
-            add(previewUi.root, lParams(wrapContent, wrapContent) {
+            // Wrapper to center the preview UI horizontally
+            val previewWrapper = FrameLayout(this@CustomThemeActivity)
+            add(previewWrapper, lParams(matchConstraints, wrapContent) {
                 below(toolbar)
                 centerHorizontally()
             })
+            previewWrapper.addView(previewUi.root, FrameLayout.LayoutParams(wrapContent, wrapContent).apply {
+                gravity = android.view.Gravity.CENTER
+            })
             add(supplementPreview, lParams(matchConstraints, wrapContent) {
-                below(previewUi.root)
+                below(previewWrapper)
                 centerHorizontally()
             })
             add(scrollView, lParams {
@@ -727,6 +815,7 @@ class CustomThemeActivity : AppCompatActivity() {
             }
             toolbar.topPadding = statusBars.top
             scrollView.bottomPadding = navBars.bottom
+            ui.post { updatePreviewScale() }
             windowInsets
         }
         // show Activity label on toolbar
@@ -734,6 +823,7 @@ class CustomThemeActivity : AppCompatActivity() {
         // show back button
         supportActionBar!!.setDisplayHomeAsUpEnabled(true)
         setContentView(ui)
+        registerLayoutChangeObserver()
         applyThemePreview(theme)
         whenHasBackground { background ->
             brightnessSeekBar.progress = background.brightness
@@ -919,6 +1009,11 @@ class CustomThemeActivity : AppCompatActivity() {
             true
         }
         else -> super.onOptionsItemSelected(item)
+    }
+
+    override fun onDestroy() {
+        unregisterLayoutChangeObserver()
+        super.onDestroy()
     }
 
     companion object {

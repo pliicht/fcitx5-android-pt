@@ -32,6 +32,7 @@ import splitties.views.dsl.constraintlayout.centerInParent
 import splitties.views.dsl.constraintlayout.constraintLayout
 import splitties.views.dsl.constraintlayout.lParams
 import splitties.views.dsl.constraintlayout.matchConstraints
+import splitties.views.dsl.constraintlayout.topOfParent
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.horizontalMargin
@@ -90,13 +91,15 @@ class KeyboardPreviewUi(override val ctx: Context, val theme: Theme) : Ui {
 
     private var keyboardWidth = -1
     private var keyboardHeight = -1
+    private var sizeScale = 1f
     private lateinit var fakeKeyboardWindow: TextKeyboard
 
     private val fakeInputView = constraintLayout {
         add(bkg, lParams {
             centerInParent()
         })
-        add(fakeKawaiiBar, lParams(height = dp(40)) {
+        add(fakeKawaiiBar, lParams(matchConstraints, dp(40)) {
+            topOfParent()
             centerHorizontally()
         })
     }
@@ -142,12 +145,15 @@ class KeyboardPreviewUi(override val ctx: Context, val theme: Theme) : Ui {
         keyboardWidth = w
         keyboardHeight = h
         setTheme(theme)
+        // Apply initial size scale
+        recalculateSize()
     }
 
     fun recalculateSize() {
-        val (w, h) = keyboardWindowAspectRatio()
-        keyboardWidth = w
-        keyboardHeight = h
+        val (baseW, baseH) = keyboardWindowAspectRatio()
+        val scale = sizeScale.coerceIn(0.35f, 1f)
+        keyboardWidth = (baseW * scale).toInt().coerceAtLeast(1)
+        keyboardHeight = (baseH * scale).toInt().coerceAtLeast(1)
         fakeKeyboardWindow.updateLayoutParams<ConstraintLayout.LayoutParams> {
             height = keyboardHeight
             horizontalMargin = keyboardSidePaddingPx
@@ -170,10 +176,18 @@ class KeyboardPreviewUi(override val ctx: Context, val theme: Theme) : Ui {
                 }
             }
         }
+        // fakeInputView size should match the calculated intrinsic size
         fakeInputView.updateLayoutParams<FrameLayout.LayoutParams> {
             width = intrinsicWidth
             height = intrinsicHeight
         }
+    }
+
+    fun setSizeScale(scale: Float) {
+        val clamped = scale.coerceIn(0.35f, 1f)
+        if (sizeScale == clamped) return
+        sizeScale = clamped
+        recalculateSize()
     }
 
     fun setBackground(drawable: Drawable) {
@@ -185,7 +199,8 @@ class KeyboardPreviewUi(override val ctx: Context, val theme: Theme) : Ui {
         if (this::fakeKeyboardWindow.isInitialized) {
             fakeInputView.removeView(fakeKeyboardWindow)
         }
-        fakeKawaiiBar.backgroundColor = if (keyBorder) Color.TRANSPARENT else theme.barColor
+        // Match the actual KawaiiBar behavior: use barColor only when keyBorder is false and theme is Builtin
+        fakeKawaiiBar.backgroundColor = if (!keyBorder && theme is Theme.Builtin) theme.barColor else theme.backgroundColor
         fakeKeyboardWindow = TextKeyboard(ctx, theme)
         fakeInputView.apply {
             add(fakeKeyboardWindow, lParams(matchConstraints, keyboardHeight) {

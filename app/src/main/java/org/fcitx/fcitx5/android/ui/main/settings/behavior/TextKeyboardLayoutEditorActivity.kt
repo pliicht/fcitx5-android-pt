@@ -1994,9 +1994,11 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
         try {
             val theme = ThemeManager.activeTheme
+            val keyBorder = org.fcitx.fcitx5.android.data.theme.ThemeManager.prefs.keyBorder.getValue()
 
             // Set preview container background color to match theme
-            previewKeyboardContainer.setBackgroundColor(theme.barColor)
+            // Use the same logic as KeyboardPreviewUi for consistency
+            previewKeyboardContainer.setBackgroundColor(if (keyBorder) theme.backgroundColor else theme.keyboardColor)
 
             previewKeyboard = TextKeyboard(this, theme).apply {
                 // Calculate keyboard height based on user settings

@@ -188,6 +188,11 @@ class KeyboardPreviewUi(override val ctx: Context, val theme: Theme) : Ui {
         if (sizeScale == clamped) return
         sizeScale = clamped
         recalculateSize()
+        // Also adjust text scale to match the keyboard size scale
+        // This ensures text doesn't look too large when keyboard is scaled down
+        if (this::fakeKeyboardWindow.isInitialized) {
+            fakeKeyboardWindow.setTextScale(sizeScale)
+        }
     }
 
     fun setBackground(drawable: Drawable) {
@@ -213,7 +218,9 @@ class KeyboardPreviewUi(override val ctx: Context, val theme: Theme) : Ui {
             fakeKeyboardWindow.onAttach()
             // provide a default IME so space label and displayText resolution run
             fakeKeyboardWindow.onInputMethodUpdate(InputMethodEntry("Preview"))
-            fakeKeyboardWindow.setTextScale(1.0f)
+            // Apply text scale that matches the keyboard size scale
+            // This ensures text size is proportional to keyboard size
+            fakeKeyboardWindow.setTextScale(sizeScale)
             fakeKeyboardWindow.requestLayout()
             fakeKeyboardWindow.invalidate()
         }

@@ -43,6 +43,8 @@ import org.fcitx.fcitx5.android.input.config.ConfigProviders
 import org.fcitx.fcitx5.android.input.config.ConfigProvider
 import org.fcitx.fcitx5.android.input.config.DefaultConfigProvider
 import org.fcitx.fcitx5.android.input.keyboard.TextKeyboard
+import org.fcitx.fcitx5.android.ui.main.settings.behavior.data.LayoutDataManager
+import org.fcitx.fcitx5.android.ui.main.settings.behavior.migration.DataMigrationManager
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.utils.LayoutJsonUtils
 import org.fcitx.fcitx5.android.utils.InputMethodUtil
 import splitties.dimensions.dp
@@ -55,16 +57,6 @@ import kotlinx.serialization.json.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import java.io.File
-
-// Extension function to convert JsonElement to Any?
-private fun JsonElement.toAny(): Any? = when (this) {
-    is JsonObject -> this.toMap()
-    is JsonArray -> this.map { it.toAny() }
-    is JsonPrimitive -> {
-        if (this.isString) this.content
-        else this.booleanOrNull ?: this.intOrNull ?: this.doubleOrNull
-    }
-}
 
 // Lenient JSON parser for reading user config files
 private val lenientJson = Json {
@@ -217,7 +209,9 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         FcitxDaemon.connect(FCITX_CONNECTION_NAME)
     }
 
-    private val entries: MutableMap<String, MutableList<MutableList<MutableMap<String, Any?>>>> = linkedMapOf()
+    private val dataManager = LayoutDataManager()
+    private val migrationManager = DataMigrationManager(dataManager)
+    private val entries get() = dataManager.entries
     private var originalEntries: Map<String, List<List<Map<String, Any?>>>> = emptyMap()
     private var currentLayout: String? = null
     private var previewSubModeLabel: String? = null
@@ -274,47 +268,6 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         else -> super.onOptionsItemSelected(item)
     }
 
-    /**
-     * Parse layout rows from JsonArray
-     */
-    private fun parseLayoutRows(rowsArray: JsonArray): List<List<Map<String, Any?>>> {
-        val rows = mutableListOf<List<Map<String, Any?>>>()
-        for (i in rowsArray.indices) {
-            val rowArray = rowsArray[i].jsonArray
-            val row = mutableListOf<Map<String, Any?>>()
-            for (j in rowArray.indices) {
-                val rowElement = rowArray[j]
-                if (rowElement is JsonNull) {
-                    continue
-                }
-                if (rowElement !is JsonObject) {
-                    continue
-                }
-                val keyJson = rowElement
-                val keyMap = mutableMapOf<String, Any?>()
-                keyJson.entries.forEach { (key, value) ->
-                    keyMap[key] = when (value) {
-                        is JsonObject -> {
-                            // Convert JsonObject to Map<String, Any?> recursively
-                            value.toMap().mapValues { it.value.toAny() }
-                        }
-                        is JsonArray -> {
-                            value.map { it.toAny() }
-                        }
-                        is JsonPrimitive -> {
-                            if (value.isString) value.content
-                            else value.booleanOrNull ?: value.intOrNull ?: value.doubleOrNull ?: value.content
-                        }
-                        is JsonNull -> null
-                    }
-                }
-                row.add(keyMap)
-            }
-            rows.add(row)
-        }
-        return rows
-    }
-
     private fun loadState() {
         // Try to load from existing TextKeyboardLayout.json file first
         val file = ConfigProviders.provider.textKeyboardLayoutFile()
@@ -355,14 +308,14 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                     when (layoutValue) {
                         is JsonArray -> {
                             // Direct layout array (no submode structure)
-                            val rows = parseLayoutRows(layoutValue.jsonArray)
+                            val rows = dataManager.parseLayoutRows(layoutValue.jsonArray)
                             result[layoutName] = rows
                         }
                         is JsonObject -> {
                             // Submode structure - process each submode
                             layoutValue.jsonObject.entries.forEach { (subModeLabel, subModeValue) ->
                                 if (subModeValue is JsonArray) {
-                                    val rows = parseLayoutRows(subModeValue.jsonArray)
+                                    val rows = dataManager.parseLayoutRows(subModeValue.jsonArray)
                                     val key = if (subModeLabel == "default") {
                                         layoutName  // Use base name for default
                                     } else {
@@ -402,11 +355,11 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         }
 
         // Check if migration is needed before creating backup
-        val needsMigration = file != null && checkIfMigrationNeeded()
+        val needsMigration = file != null && migrationManager.checkIfMigrationNeeded()
 
         // Only backup if migration is actually needed
         val backupFile = if (needsMigration) {
-            backupOriginalFile(file!!)
+            migrationManager.backupOriginalFile(file!!)
         } else {
             null
         }
@@ -414,15 +367,15 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         // Migrate old displayText format to new submode structure
         // This ensures a smooth and automatic migration for all users
         try {
-            migrateAllDisplayTextToSubmodeStructure()
+            migrationManager.migrateAllDisplayTextToSubmodeStructure()
         } catch (e: Exception) {
             android.util.Log.e("TextKeyboardEditor", "Migration failed, restoring backup", e)
-            backupFile?.let { restoreFromBackup(it, file) }
+            backupFile?.let { migrationManager.restoreFromBackup(file) }
             // Re-parse the restored file
             val restoredParsed = runCatching {
                 val jsonStr = file!!.readText()
                 val jsonElement = lenientJson.parseToJsonElement(jsonStr)
-                parseJsonToEntries(jsonElement.jsonObject)
+                migrationManager.parseJsonToEntries(jsonElement.jsonObject)
             }.getOrNull()
             if (restoredParsed != null) {
                 entries.clear()
@@ -956,7 +909,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
             // Migrate displayText from old format to new submode format
             // If base layout has displayText: {subModeLabel: "text"}, extract it
-            migrateDisplayTextForSubMode(copiedLayout, subModeLabel)
+            migrationManager.migrateDisplayTextForSubMode(copiedLayout, subModeLabel)
 
             entries[subModeKey] = copiedLayout
         } else {
@@ -1035,281 +988,6 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         }
         
         return labels.toList()
-    }
-
-    /**
-     * Migrate displayText from old format to new submode format.
-     * If base layout has displayText: {subModeLabel: "text"}, extract it to simple string.
-     */
-    private fun migrateDisplayTextForSubMode(layout: MutableList<MutableList<MutableMap<String, Any?>>>, subModeLabel: String) {
-        for (row in layout) {
-            for (key in row) {
-                val displayText = key["displayText"]
-                when (displayText) {
-                    is Map<*, *> -> {
-                        // Old format: displayText: {mode1: "text1", mode2: "text2"}
-                        // Extract the value for current subModeLabel
-                        val specificValue = displayText[subModeLabel]?.toString()
-                        val defaultValue = displayText["default"]?.toString()
-                        
-                        // Use specific value if exists, otherwise use default
-                        val newValue = specificValue ?: defaultValue
-                        
-                        if (newValue != null) {
-                            // Replace with simple string
-                            key["displayText"] = newValue
-                        } else {
-                            // No matching value, remove displayText
-                            key.remove("displayText")
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Clean up base layout's displayText entries that are now covered by submode layouts.
-     * Removes subModeLabel keys from displayText: {} in base layout if submode layout exists.
-     */
-    private fun cleanupBaseLayoutDisplayText(layoutName: String) {
-        val baseLayout = entries[layoutName] ?: return
-
-        // Find all existing submode keys for this layout
-        val subModeKeys = entries.keys.filter {
-            it.startsWith("$layoutName:") && it != "$layoutName:default"
-        }
-
-        if (subModeKeys.isEmpty()) return
-
-        for (row in baseLayout) {
-            for (key in row) {
-                val displayText = key["displayText"]
-                when (displayText) {
-                    is MutableMap<*, *> -> {
-                        // Remove keys that are now covered by submode layouts
-                        val keysToRemove = subModeKeys.map { it.substringAfter("$layoutName:") }
-                            .filter { it in displayText.keys }
-                        keysToRemove.forEach { keyToRemove ->
-                            displayText.remove(keyToRemove)
-                        }
-
-                        // If only "default" left or empty, convert to simple string
-                        val remainingKeys = displayText.keys.filter { it != "default" }
-                        if (remainingKeys.isEmpty()) {
-                            val defaultValue = displayText["default"]?.toString()
-                            if (defaultValue != null) {
-                                key["displayText"] = defaultValue
-                            } else if (displayText.isEmpty()) {
-                                key.remove("displayText")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Migrate all old displayText format to new submode structure automatically.
-     * 
-     * Migration strategy:
-     * 1. For layouts with existing submode layouts (e.g., "rime:倉頡五代"):
-     *    - Extract displayText values from base layout to corresponding submode layouts
-     *    - Convert base layout displayText to simple strings or remove
-     * 2. For layouts without submode layouts:
-     *    - Keep displayText as-is for backward compatibility
-     * 
-     * This ensures a smooth, automatic, and non-destructive migration.
-     */
-    private fun migrateAllDisplayTextToSubmodeStructure() {
-        // Group layouts by base name
-        val layoutGroups = entries.keys.groupBy { key ->
-            if (key.contains(':')) key.substringBeforeLast(':') else key
-        }
-
-        layoutGroups.forEach { (baseName, keys) ->
-            // Check if this layout has submode layouts
-            val subModeKeys = keys.filter { it.contains(':') && it != "$baseName:default" }
-
-            if (subModeKeys.isEmpty()) {
-                // No submode layouts - keep old format for backward compatibility
-                // But still normalize JsonObject to Map for consistency
-                val baseKey = keys.firstOrNull { it == baseName || it == "$baseName:default" }
-                baseKey?.let { normalizeDisplayTextToMap(it) }
-                return@forEach
-            }
-
-            // Has submode layouts - migrate old format
-            val baseKey = keys.firstOrNull { it == baseName || it == "$baseName:default" }
-
-            // Migrate each submode layout
-            subModeKeys.forEach { subModeKey ->
-                val subModeLabel = subModeKey.substringAfterLast(':')
-                val subModeLayout = entries[subModeKey]
-                subModeLayout?.let { layout ->
-                    migrateDisplayTextForSubMode(layout, subModeLabel)
-                }
-            }
-
-            // Clean up base layout
-            baseKey?.let { cleanupBaseLayoutDisplayText(baseName) }
-        }
-    }
-
-    /**
-     * Normalize displayText from JsonObject to Map<String, Any?> for consistent handling.
-     * This is called during initial load to ensure all data is in the correct format.
-     */
-    private fun normalizeDisplayTextToMap(layoutKey: String) {
-        val layout = entries[layoutKey] ?: return
-        for (row in layout) {
-            for (key in row) {
-                val displayText = key["displayText"]
-                // Data is already in Map<String, Any?> format after parsing
-                // This is just a safety check for any edge cases
-                if (displayText is Map<*, *>) {
-                    // Values are already Any? type, no conversion needed
-                    // Just ensure the map is mutable and properly typed
-                    key["displayText"] = displayText.toMutableMap() as MutableMap<String, Any?>
-                }
-            }
-        }
-    }
-
-    /**
-     * Check if migration is needed by detecting old displayText format.
-     * Old format: displayText: { "倉頡五代": "手" } in base layout without submode layouts
-     * @return true if migration is needed, false if data is already in new format
-     */
-    private fun checkIfMigrationNeeded(): Boolean {
-        // Group layouts by base name
-        val layoutGroups = entries.keys.groupBy { key ->
-            if (key.contains(':')) key.substringBeforeLast(':') else key
-        }
-
-        layoutGroups.forEach { (baseName, keys) ->
-            val hasSubModeLayouts = keys.any { it.contains(':') && it != "$baseName:default" }
-
-            if (hasSubModeLayouts) {
-                // Has submode layouts - check if base layout still has old format displayText
-                val baseKey = keys.firstOrNull { it == baseName || it == "$baseName:default" }
-                val baseLayout = baseKey?.let { entries[it] }
-                baseLayout?.forEach { row ->
-                    row.forEach { key ->
-                        val displayText = key["displayText"]
-                        if (displayText is Map<*, *> && displayText.isNotEmpty()) {
-                            // Found old format in base layout with submode layouts - migration needed
-                            return true
-                        }
-                    }
-                }
-            }
-        }
-
-        return false
-    }
-
-    /**
-     * Backup original file before migration.
-     * Creates a backup with timestamp in the same directory.
-     * Also cleans up old backups to prevent accumulation.
-     * @return The backup file, or null if backup failed
-     */
-    private fun backupOriginalFile(originalFile: File): File? {
-        return runCatching {
-            val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
-                .format(java.util.Date())
-            val backupFileName = "${originalFile.nameWithoutExtension}_backup_$timestamp.json"
-            val backupFile = File(originalFile.parentFile, backupFileName)
-
-            originalFile.copyTo(backupFile, overwrite = false)
-            android.util.Log.i("TextKeyboardEditor", "Backup created: ${backupFile.absolutePath}")
-
-            // Clean up old backups (keep only the latest 3)
-            cleanupOldBackups(originalFile, keepCount = 3)
-
-            backupFile
-        }.onFailure { e ->
-            android.util.Log.e("TextKeyboardEditor", "Failed to create backup", e)
-        }.getOrNull()
-    }
-
-    /**
-     * Clean up old backup files, keeping only the latest N backups.
-     * @param originalFile The original file to find backups for
-     * @param keepCount Number of backups to keep
-     */
-    private fun cleanupOldBackups(originalFile: File, keepCount: Int = 3) {
-        runCatching {
-            val backupPattern = "${originalFile.nameWithoutExtension}_backup_"
-            val backups = originalFile.parentFile
-                ?.listFiles { file ->
-                    file.name.startsWith(backupPattern) && file.name.endsWith(".json")
-                }
-                ?.sortedByDescending { it.lastModified() }
-                ?: return
-
-            if (backups.size > keepCount) {
-                backups.drop(keepCount).forEach { oldBackup ->
-                    if (oldBackup.delete()) {
-                        android.util.Log.i("TextKeyboardEditor", "Deleted old backup: ${oldBackup.absolutePath}")
-                    }
-                }
-            }
-        }.onFailure { e ->
-            android.util.Log.e("TextKeyboardEditor", "Failed to cleanup old backups", e)
-        }
-    }
-
-    /**
-     * Restore from backup file.
-     * @param backupFile The backup file to restore from
-     * @param targetFile The original file to restore to
-     */
-    private fun restoreFromBackup(backupFile: File, targetFile: File?) {
-        if (targetFile == null) return
-
-        runCatching {
-            if (backupFile.exists()) {
-                backupFile.copyTo(targetFile, overwrite = true)
-                android.util.Log.i("TextKeyboardEditor", "Restored from backup: ${backupFile.absolutePath}")
-            }
-        }.onFailure { e ->
-            android.util.Log.e("TextKeyboardEditor", "Failed to restore from backup", e)
-        }
-    }
-
-    /**
-     * Parse JsonElement to entries map.
-     * Helper function for restoring from backup.
-     */
-    private fun parseJsonToEntries(jsonObject: JsonObject): Map<String, List<List<Map<String, Any?>>>> {
-        val result = mutableMapOf<String, List<List<Map<String, Any?>>>>()
-
-        jsonObject.entries.forEach { (layoutName, layoutValue) ->
-            when (layoutValue) {
-                is JsonArray -> {
-                    val rows = parseLayoutRows(layoutValue.jsonArray)
-                    result[layoutName] = rows
-                }
-                is JsonObject -> {
-                    layoutValue.jsonObject.entries.forEach { (subModeLabel, subModeValue) ->
-                        if (subModeValue is JsonArray) {
-                            val rows = parseLayoutRows(subModeValue.jsonArray)
-                            val key = if (subModeLabel == "default") {
-                                layoutName
-                            } else {
-                                "$layoutName:$subModeLabel"
-                            }
-                            result[key] = rows
-                        }
-                    }
-                }
-                else -> {}
-            }
-        }
-        return result
     }
 
     private fun fetchCurrentImeAndSubModeLabels(): Pair<InputMethodEntry?, List<String>> {
@@ -1889,7 +1567,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             val displayTextData = keyData["displayText"]
             val displayTextMap = when (displayTextData) {
                 is JsonObject -> displayTextData.mapValues { entry ->
-                    entry.value.toAny()
+                    LayoutDataManager.toAny(entry.value)
                 }
                 is Map<*, *> -> displayTextData
                 else -> null
@@ -2855,7 +2533,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         }.distinct()
         
         baseLayoutNames.forEach { layoutName ->
-            cleanupBaseLayoutDisplayText(layoutName)
+            migrationManager.cleanupBaseLayoutDisplayText(layoutName)
         }
 
         val file = layoutFile ?: run {

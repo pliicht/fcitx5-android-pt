@@ -280,8 +280,8 @@ open class TextKeyView(
         text = def.displayText
         setTextSize(TypedValue.COMPLEX_UNIT_SP, def.textSize)
         textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
-        // keep original typeface, apply textStyle only
-        // Font will be set in batch by BaseKeyboard.reloadLayout() for better performance
+        // Set font key for batch setting in BaseKeyboard.reloadLayout()
+        fontKey = "key_main_font"
         setTypeface(typeface, def.textStyle)
         setTextColor(
             when (def.variant) {
@@ -330,7 +330,8 @@ class AltTextKeyView(
         isFocusable = false
         // TODO hardcoded alt text size
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.666667f)
-        // Font will be set in batch by BaseKeyboard.reloadLayout() for better performance
+        // Set font key for batch setting in BaseKeyboard.reloadLayout()
+        fontKey = "key_alt_font"
         setTypeface(typeface, Typeface.BOLD)
         text = def.altText
         textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR

@@ -54,13 +54,15 @@ class CandidateAutoScaleTextView @JvmOverloads constructor(
     private var touchSlop = 0
     private var maxScrollX = 0f
 
+    private var fontInitialized = false
+
     init {
-        setFontTypeFace("font")
         touchSlop = ViewConfiguration.get(this.context).scaledTouchSlop
     }
 
     fun setFontTypeFace(key: String) {
         fontTypeFaceKey = key
+        fontInitialized = true
         setTypeface(
             AutoScaleTextView.fontTypefaceMap[key]
                 ?: AutoScaleTextView.fontTypefaceMap["font"]

@@ -21,10 +21,6 @@ import splitties.views.setPaddingDp
 open class HorizontalCandidateViewAdapter(val theme: Theme) :
     RecyclerView.Adapter<CandidateViewHolder>() {
 
-    // Cache font reference to avoid repeated FontProviders access
-    private val candFontTypeface: android.graphics.Typeface? = 
-        org.fcitx.fcitx5.android.input.font.FontProviders.fontTypefaceMap["cand_font"]
-
     init {
         setHasStableIds(true)
     }
@@ -48,8 +44,8 @@ open class HorizontalCandidateViewAdapter(val theme: Theme) :
 
     @CallSuper
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CandidateViewHolder {
-        // Pass cached font to CandidateItemUi for batch setting
-        val ui = CandidateItemUi(parent.context, theme, candFontTypeface)
+        // Pass font key to CandidateItemUi for batch setting
+        val ui = CandidateItemUi(parent.context, theme, "cand_font")
         ui.root.apply {
             minimumWidth = dp(40)
             setPaddingDp(10, 0, 10, 0)

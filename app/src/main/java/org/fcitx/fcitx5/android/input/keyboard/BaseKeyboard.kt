@@ -120,24 +120,26 @@ abstract class BaseKeyboard(
         removeAllViews()
         spaceKeys.clear()
         touchTarget.clear()
-        
+
         // Get all fonts once for batch setting - improves performance by reducing FontProviders access
         val fontMap = org.fcitx.fcitx5.android.input.font.FontProviders.fontTypefaceMap
         val mainFont = fontMap["key_main_font"]
         val altFont = fontMap["key_alt_font"]
-        
+
         val splitKeyboard = splitKeyboardManager.shouldUseSplitKeyboard(width)
         lastSplitLandscapeState = splitKeyboard
         keyRows = keyLayout.map { row ->
             val keyViews = row.map(::createKeyView).apply {
-                // Batch set fonts for all key views in this row
+                // Batch set fonts for all key views in this row using setFontTypeFace()
+                // to properly apply custom fonts from FontProviders
+                // Note: Check AltTextKeyView before TextKeyView since AltTextKeyView is a subclass of TextKeyView
                 forEach { keyView ->
                     when (keyView) {
-                        is TextKeyView -> keyView.mainText.typeface = mainFont
                         is AltTextKeyView -> {
-                            keyView.mainText.typeface = mainFont
-                            keyView.altText.typeface = altFont
+                            keyView.mainText.setFontTypeFace("key_main_font")
+                            keyView.altText.setFontTypeFace("key_alt_font")
                         }
+                        is TextKeyView -> keyView.mainText.setFontTypeFace("key_main_font")
                     }
                 }
             }

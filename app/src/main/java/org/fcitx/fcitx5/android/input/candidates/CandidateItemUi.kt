@@ -19,9 +19,9 @@ import splitties.views.dsl.core.wrapContent
 import splitties.views.gravityCenter
 
 class CandidateItemUi(
-    override val ctx: Context, 
+    override val ctx: Context,
     theme: Theme,
-    typeface: android.graphics.Typeface? = null  // Optional: external font for batch setting
+    private val fontKey: String? = null  // Optional: font key for batch setting
 ) : Ui {
 
     val text = view(::CandidateAutoScaleTextView) {
@@ -30,17 +30,11 @@ class CandidateItemUi(
         isSingleLine = true
         gravity = gravityCenter
         setTextColor(theme.candidateTextColor)
-        // Set font if provided externally (for batch setting)
-        if (typeface != null) {
-            this.typeface = typeface
-        }
     }
 
     init {
-        // Only set font from FontProviders if not provided externally
-        if (typeface == null) {
-            text.setFontTypeFace("cand_font")
-        }
+        // Set font from font key for batch setting
+        fontKey?.let { text.setFontTypeFace(it) }
     }
 
     override val root = view(::CustomGestureView) {

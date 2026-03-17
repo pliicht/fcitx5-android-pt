@@ -35,6 +35,7 @@ object FontProviders {
 
     /**
      * Mark refresh needed after saving fontset in settings.
+     * Keyboard will refresh on next show via checkAndClearRefreshFlag().
      */
     fun markNeedsRefresh() {
         provider.clearCache()

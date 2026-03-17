@@ -45,6 +45,7 @@ import org.fcitx.fcitx5.android.input.config.DefaultConfigProvider
 import org.fcitx.fcitx5.android.input.keyboard.TextKeyboard
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.data.LayoutDataManager
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.migration.DataMigrationManager
+import org.fcitx.fcitx5.android.ui.main.settings.behavior.preview.KeyboardPreviewManager
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.utils.LayoutJsonUtils
 import org.fcitx.fcitx5.android.utils.InputMethodUtil
 import splitties.dimensions.dp
@@ -211,6 +212,9 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
     private val dataManager = LayoutDataManager()
     private val migrationManager = DataMigrationManager(dataManager)
+    private val previewManager by lazy {
+        KeyboardPreviewManager(this, previewKeyboardContainer, dataManager.entries)
+    }
     private val entries get() = dataManager.entries
     private var originalEntries: Map<String, List<List<Map<String, Any?>>>> = emptyMap()
     private var currentLayout: String? = null
@@ -240,7 +244,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         buildSpinner()
         buildSubModeSpinner()
         buildRows()
-        updatePreview()
+        run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
         maybePromptSwitchToFcitxIme()
     }
 
@@ -520,7 +524,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 }
 
                 buildRows()
-                updatePreview()
+                run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
 
                 // Show toast when switching IME/layout
                 if (newLayout != oldLayout) {
@@ -659,7 +663,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 previewSubModeLabel = selected
                 runCatching {
                     // Update preview and editor rows to show the selected submode layout
-                    updatePreview()
+                    run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
                     buildRows()
                     updateSaveButtonState()
 
@@ -854,7 +858,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 buildSpinner()
                 buildSubModeSpinner()
                 buildRows()
-                updatePreview()
+                run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
                 updateSaveButtonState()
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -927,7 +931,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         // Build UI components - note: don't use forceResetSelection to preserve previewSubModeLabel
         buildRows()
         buildSubModeSpinner(forceResetSelection = false)
-        updatePreview()
+        run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
         updateSaveButtonState()
         showToast(getString(R.string.text_keyboard_layout_submode_added, subModeLabel))
     }
@@ -1182,7 +1186,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                     viewHolder.itemView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     // Refresh adapter after drag ends to ensure correct position and preview
                     rowsAdapter?.notifyDataSetChanged()
-                    updatePreview()
+                    run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
                     updateSaveButtonState() // Update save button state
                 }
                 
@@ -1360,7 +1364,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
                         override fun onDragEnded(view: View, position: Int) {
                             buildRows()
-                            updatePreview()
+                            run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
                         }
                     }
                     holder.keysFlow.onDragListener = dragListener
@@ -2027,7 +2031,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                     row[rowIndex].add(newKey)
                 }
                 buildRows()
-                updatePreview()
+                run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
                 updateSaveButtonState() // Update save button state
                 dialog.dismiss()
             }
@@ -2085,7 +2089,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 if (rowIndex < row.size && keyIndex < row[rowIndex].size) {
                     row[rowIndex].removeAt(keyIndex)
                     buildRows()
-                    updatePreview()
+                    run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
                     updateSaveButtonState() // Update save button state
                 }
             }
@@ -2113,7 +2117,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 if (rowIndex < row.size) {
                     row.removeAt(rowIndex)
                     buildRows()
-                    updatePreview()
+                    run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
                     updateSaveButtonState() // Update save button state
                 }
             }
@@ -2137,7 +2141,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         
         rows.add(mutableListOf())
         buildRows()
-        updatePreview()
+        run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
         updateSaveButtonState()
     }
 
@@ -2354,7 +2358,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 buildSpinner()
                 buildSubModeSpinner()
                 buildRows()
-                updatePreview()
+                run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
                 updateSaveButtonState() // Update save button state
                 
                 // Show toast for new IME layout
@@ -2364,150 +2368,6 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             }
         }
         dialog.show()
-    }
-
-    private fun updatePreview() {
-        previewKeyboardContainer.removeAllViews()
-
-        val layoutName = currentLayout ?: return
-
-        // Try to load submode-specific layout first, same logic as buildRows()
-        val subModeKey = previewSubModeLabel?.let { "$layoutName:$it" }
-        val rows = subModeKey?.let { entries[it] } ?: entries[layoutName] ?: return
-
-        // Remove old keyboard view
-        previewKeyboard?.let {
-            previewKeyboardContainer.removeView(it)
-            previewKeyboard = null
-        }
-
-        // Create a temporary layout file for preview
-        // Always create submode structure to ensure TextKeyboard loads the correct layout
-        val tempFile = File(cacheDir, "temp_layout.json")
-        
-        // Build submode map with all available submodes for this layout
-        val subModeMap = mutableMapOf<String, JsonElement>()
-        
-        // Add the current editing layout (either submode or default)
-        val currentRowsArray = JsonArray(rows.map { row ->
-            JsonArray(row.map { key ->
-                JsonObject(key.entries.associate { (k, v) ->
-                    k to LayoutJsonUtils.convertToJsonProperty(v)
-                })
-            })
-        })
-
-        if (subModeKey != null && entries.containsKey(subModeKey)) {
-            // Editing a submode layout - add it with its label
-            subModeMap[previewSubModeLabel ?: "default"] = currentRowsArray
-            // Also add default layout if it exists (for fallback)
-            val defaultRows = entries[layoutName]
-            if (defaultRows != null) {
-                val defaultRowsArray = JsonArray(defaultRows.map { row ->
-                    JsonArray(row.map { key ->
-                        JsonObject(key.entries.associate { (k, v) ->
-                            k to LayoutJsonUtils.convertToJsonProperty(v)
-                        })
-                    })
-                })
-                subModeMap["default"] = defaultRowsArray
-            }
-        } else {
-            // Editing default layout
-            subModeMap["default"] = currentRowsArray
-        }
-        
-        val tempJson = JsonObject(mapOf(layoutName to JsonObject(subModeMap)))
-        tempFile.writeText(Json.encodeToString(tempJson))
-
-        // Temporarily replace the layout file and reload
-        val provider = ConfigProviders.provider
-        val tempProvider = object : ConfigProvider {
-            override fun textKeyboardLayoutFile(): File? = tempFile
-            override fun popupPresetFile(): File? = provider.popupPresetFile()
-            override fun fontsetFile(): File? = provider.fontsetFile()
-            override fun writeFontsetPathMap(pathMap: Map<String, List<String>>): Result<File> =
-                provider.writeFontsetPathMap(pathMap)
-        }
-
-        ConfigProviders.provider = tempProvider
-        TextKeyboard.clearCachedKeyDefLayouts()
-
-        try {
-            val theme = ThemeManager.activeTheme
-            val keyBorder = org.fcitx.fcitx5.android.data.theme.ThemeManager.prefs.keyBorder.getValue()
-
-            // Set preview container background color to match theme
-            // Use the same logic as KeyboardPreviewUi for consistency
-            previewKeyboardContainer.setBackgroundColor(if (keyBorder) theme.backgroundColor else theme.keyboardColor)
-
-            previewKeyboard = TextKeyboard(this, theme).apply {
-                // Calculate keyboard height based on user settings
-                val displayMetrics = resources.displayMetrics
-                val screenHeight = displayMetrics.heightPixels
-
-                // Get keyboard height percentage from preferences
-                val keyboardPrefs = org.fcitx.fcitx5.android.data.prefs.AppPrefs.getInstance().keyboard
-                val heightPercent = keyboardPrefs.keyboardHeightPercent.getValue()
-                val keyboardHeight = (screenHeight * heightPercent / 100).toInt()
-
-                // Get keyboard side and bottom padding from preferences
-                val sidePadding = keyboardPrefs.keyboardSidePadding.getValue()
-                val bottomPadding = keyboardPrefs.keyboardBottomPadding.getValue()
-                val sidePaddingPx = (sidePadding * resources.displayMetrics.density).toInt()
-                val bottomPaddingPx = (bottomPadding * resources.displayMetrics.density).toInt()
-
-                val layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    keyboardHeight
-                )
-                layoutParams.setMargins(sidePaddingPx, 0, sidePaddingPx, bottomPaddingPx)
-                previewKeyboardContainer.addView(this, layoutParams)
-                onAttach()
-                val currentIme = runCatching {
-                    fcitxConnection.runImmediately { inputMethodEntryCached }
-                }.getOrNull()
-                val selectedSubModeLabel = previewSubModeLabel?.trim().orEmpty()
-                val previewIme = currentIme
-                    ?.copy(
-                        uniqueName = layoutName,
-                        name = layoutName,
-                        subMode = if (selectedSubModeLabel.isNotEmpty()) {
-                            currentIme.subMode.copy(
-                                label = selectedSubModeLabel,
-                                name = selectedSubModeLabel
-                            )
-                        } else {
-                            currentIme.subMode.copy(
-                                name = "",
-                                label = "",
-                                icon = ""
-                            )
-                        }
-                    )
-                    ?: InputMethodEntry(layoutName)
-                onInputMethodUpdate(previewIme)
-                setTextScale(1.0f)
-                // Refresh style to ensure theme colors are applied
-                refreshStyle()
-                requestLayout()
-                invalidate()
-            }
-        } catch (e: Exception) {
-            // If preview fails, show error message
-            val errorText = TextView(this).apply {
-                text = getString(R.string.text_keyboard_layout_preview_error, e.message ?: "")
-                textSize = 12f
-                setTextColor(android.graphics.Color.RED)
-                setPadding(dp(16), dp(8), dp(16), dp(8))
-            }
-            previewKeyboardContainer.addView(errorText)
-        } finally {
-            // Restore original provider
-            ConfigProviders.provider = DefaultConfigProvider
-            TextKeyboard.clearCachedKeyDefLayouts()
-            tempFile.delete()
-        }
     }
 
     private fun saveLayout() {

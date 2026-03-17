@@ -43,6 +43,7 @@ import org.fcitx.fcitx5.android.input.config.ConfigProviders
 import org.fcitx.fcitx5.android.input.config.ConfigProvider
 import org.fcitx.fcitx5.android.input.config.DefaultConfigProvider
 import org.fcitx.fcitx5.android.input.keyboard.TextKeyboard
+import org.fcitx.fcitx5.android.ui.main.settings.behavior.utils.LayoutJsonUtils
 import org.fcitx.fcitx5.android.utils.InputMethodUtil
 import splitties.dimensions.dp
 import splitties.resources.styledColor
@@ -485,62 +486,10 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         val defaultLayout = TextKeyboard.DefaultLayout
         val rows = defaultLayout.map { row ->
             row.map { keyDef ->
-                keyDefToJson(keyDef)
+                LayoutJsonUtils.keyDefToJson(keyDef)
             }
         }
         return mapOf("default" to rows)
-    }
-
-    private fun keyDefToJson(keyDef: org.fcitx.fcitx5.android.input.keyboard.KeyDef): MutableMap<String, Any?> {
-        val json = mutableMapOf<String, Any?>()
-        json["type"] = when (keyDef) {
-            is org.fcitx.fcitx5.android.input.keyboard.AlphabetKey -> "AlphabetKey"
-            is org.fcitx.fcitx5.android.input.keyboard.CapsKey -> "CapsKey"
-            is org.fcitx.fcitx5.android.input.keyboard.LayoutSwitchKey -> "LayoutSwitchKey"
-            is org.fcitx.fcitx5.android.input.keyboard.CommaKey -> "CommaKey"
-            is org.fcitx.fcitx5.android.input.keyboard.LanguageKey -> "LanguageKey"
-            is org.fcitx.fcitx5.android.input.keyboard.SpaceKey -> "SpaceKey"
-            is org.fcitx.fcitx5.android.input.keyboard.SymbolKey -> "SymbolKey"
-            is org.fcitx.fcitx5.android.input.keyboard.ReturnKey -> "ReturnKey"
-            is org.fcitx.fcitx5.android.input.keyboard.BackspaceKey -> "BackspaceKey"
-            else -> "SpaceKey"
-        }
-        val appearance = keyDef.appearance
-        when (keyDef) {
-            is org.fcitx.fcitx5.android.input.keyboard.AlphabetKey -> {
-                json["main"] = keyDef.character
-                json["alt"] = keyDef.punctuation
-                json["displayText"] = keyDef.displayText
-            }
-            is org.fcitx.fcitx5.android.input.keyboard.CapsKey -> {
-                json["weight"] = appearance.percentWidth
-            }
-            is org.fcitx.fcitx5.android.input.keyboard.LayoutSwitchKey -> {
-                json["label"] = (appearance as? org.fcitx.fcitx5.android.input.keyboard.KeyDef.Appearance.Text)?.displayText
-                json["subLabel"] = keyDef.to
-                json["weight"] = appearance.percentWidth
-            }
-            is org.fcitx.fcitx5.android.input.keyboard.CommaKey -> {
-                json["weight"] = appearance.percentWidth
-            }
-            is org.fcitx.fcitx5.android.input.keyboard.LanguageKey -> {
-                json["weight"] = appearance.percentWidth
-            }
-            is org.fcitx.fcitx5.android.input.keyboard.SpaceKey -> {
-                json["weight"] = appearance.percentWidth
-            }
-            is org.fcitx.fcitx5.android.input.keyboard.SymbolKey -> {
-                json["label"] = keyDef.symbol
-                json["weight"] = appearance.percentWidth
-            }
-            is org.fcitx.fcitx5.android.input.keyboard.ReturnKey -> {
-                json["weight"] = appearance.percentWidth
-            }
-            is org.fcitx.fcitx5.android.input.keyboard.BackspaceKey -> {
-                json["weight"] = appearance.percentWidth
-            }
-        }
-        return json
     }
 
     private fun buildSpinner() {
@@ -2765,11 +2714,11 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         val currentRowsArray = JsonArray(rows.map { row ->
             JsonArray(row.map { key ->
                 JsonObject(key.entries.associate { (k, v) ->
-                    k to convertToJsonProperty(v)
+                    k to LayoutJsonUtils.convertToJsonProperty(v)
                 })
             })
         })
-        
+
         if (subModeKey != null && entries.containsKey(subModeKey)) {
             // Editing a submode layout - add it with its label
             subModeMap[previewSubModeLabel ?: "default"] = currentRowsArray
@@ -2779,7 +2728,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 val defaultRowsArray = JsonArray(defaultRows.map { row ->
                     JsonArray(row.map { key ->
                         JsonObject(key.entries.associate { (k, v) ->
-                            k to convertToJsonProperty(v)
+                            k to LayoutJsonUtils.convertToJsonProperty(v)
                         })
                     })
                 })
@@ -2915,7 +2864,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         }
         file.parentFile?.mkdirs()
 
-        val jsonElement = convertToSaveJson()
+        val jsonElement = LayoutJsonUtils.convertToSaveJson(entries)
 
         file.writeText(prettyJson.encodeToString(jsonElement) + "\n")
 
@@ -3013,27 +2962,6 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         return errors
     }
 
-    private fun convertToJsonProperty(value: Any?): JsonElement = when (value) {
-        is JsonObject -> value
-        is JsonArray -> value
-        is Map<*, *> -> {
-            val map = value.mapValues { (subKey, subValue) ->
-                convertToJsonProperty(subValue)
-            }
-            JsonObject(map.mapKeys { it.key.toString() }.toMap())
-        }
-        is List<*> -> {
-            val list = value.map { convertToJsonProperty(it) }
-            JsonArray(list)
-        }
-        null -> JsonNull
-        is Number -> JsonPrimitive(value)
-        is Boolean -> JsonPrimitive(value)
-        is String -> JsonPrimitive(value)
-        else -> JsonPrimitive(value.toString())
-    }
-
-
     private fun showToast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
@@ -3083,84 +3011,6 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                     row.map { key -> key.toMap() }
                 }
             }
-
-    /**
-     * Convert entries to JSON structure for saving.
-     * Supports submode layouts as nested objects:
-     * {
-     *   "rime": {
-     *     "default": [...],
-     *     "倉頡五代": [...]
-     *   },
-     *   "pinyin": [...]
-     * }
-     */
-    private fun convertToSaveJson(): JsonObject {
-        // Group entries by base layout name
-        val layoutMap = mutableMapOf<String, JsonElement>()
-
-        // Collect base layout names (without submode suffix)
-        // Submode keys have format: "layoutName:subModeLabel"
-        // We need to extract the base layout name (before the last colon)
-        val baseLayoutNames = entries.keys.map { key ->
-            if (key.contains(':')) {
-                key.substringBeforeLast(':')
-            } else {
-                key
-            }
-        }.distinct()
-
-        for (baseName in baseLayoutNames) {
-            // Check if this layout has submode layouts
-            // Submode keys have format: "baseName:subModeLabel"
-            val subModeKeys = entries.keys.filter { key ->
-                // Match exact base name or submode keys starting with "baseName:"
-                key == baseName || key.startsWith("$baseName:")
-            }
-
-            // Check if any of the keys is a submode key (contains colon and baseName prefix)
-            val hasSubModeKeys = subModeKeys.any { key ->
-                key != baseName && key.startsWith("$baseName:")
-            }
-
-            if (hasSubModeKeys) {
-                // Has submode layouts - create nested object
-                val subModeMap = mutableMapOf<String, JsonElement>()
-
-                for (key in subModeKeys) {
-                    // Extract submode label (after the last colon)
-                    val subModeLabel = if (key.contains(':')) {
-                        key.substringAfterLast(':').ifEmpty { "default" }
-                    } else {
-                        "default"
-                    }
-
-                    val rows = entries[key]!!
-                    val jsonArray = JsonArray(rows.map { row ->
-                        JsonArray(row.map { keyMap ->
-                            JsonObject(keyMap.mapValues { (_, v) -> convertToJsonProperty(v) })
-                        })
-                    })
-
-                    subModeMap[subModeLabel] = jsonArray
-                }
-
-                layoutMap[baseName] = JsonObject(subModeMap.toSortedMap())
-            } else {
-                // No submode layouts - use direct array
-                val key = subModeKeys.firstOrNull() ?: baseName
-                val rows = entries[key] ?: continue
-                val jsonArray = JsonArray(rows.map { row ->
-                    JsonArray(row.map { keyMap ->
-                        JsonObject(keyMap.mapValues { (_, v) -> convertToJsonProperty(v) })
-                    })
-                })
-                layoutMap[baseName] = jsonArray
-            }
-        }
-
-        return JsonObject(layoutMap.toSortedMap())
-    }
 
     private fun hasChanges(): Boolean = normalizedEntries() != originalEntries
 

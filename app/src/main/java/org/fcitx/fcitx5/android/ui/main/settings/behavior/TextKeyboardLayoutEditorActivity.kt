@@ -955,10 +955,10 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
     private fun extractSubModeLabelsFromCurrentLayout(): List<String> {
         val layoutName = currentLayout ?: return emptyList()
-        
+
         // Collect all submode labels from submode-specific layouts
         val labels = linkedSetOf<String>()
-        
+
         // Look for submode layouts with key "layoutName:subModeLabel"
         entries.keys.forEach { key ->
             if (key.startsWith("$layoutName:")) {
@@ -968,10 +968,10 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 }
             }
         }
-        
+
         // Also extract from displayText in the default layout
         val rows = entries[layoutName] ?: return labels.toList()
-        
+
         rows.forEach { row ->
             row.forEach { key ->
                 when (val displayText = key["displayText"]) {
@@ -990,7 +990,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 }
             }
         }
-        
+
         return labels.toList()
     }
 
@@ -1059,7 +1059,6 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
     private var rowsAdapter: RowsAdapter? = null
     private var rowTouchHelper: ItemTouchHelper? = null
-    // Mutable reference to current layout's rows, updated in buildRows()
     private var currentRowsRef: MutableList<MutableList<MutableMap<String, Any?>>> = mutableListOf()
 
     private fun buildRows() {
@@ -1070,30 +1069,29 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
         // Determine which layout to edit
         val rows = if (subModeKey != null && entries.containsKey(subModeKey)) {
-            // Submode layout exists - edit it
             entries[subModeKey]
         } else {
-            // Edit default layout
             entries[layoutName]
         }
-        
-        // If rows is null, the currentLayout doesn't exist in entries - recover
-        if (rows == null) {
-            // Try to recover by finding a valid layout
+
+        // If rows is null or empty, recover by finding a valid layout
+        if (rows == null || rows.isEmpty()) {
             val validLayout = entries.keys.firstOrNull { !it.contains(':') }
             if (validLayout != null) {
                 currentLayout = validLayout
                 previewSubModeLabel = null
-                // Rebuild with the new valid layout
-                buildRows()
+                buildSubModeSpinner(forceResetSelection = true)
+                currentRowsRef = entries[validLayout] ?: mutableListOf()
+                rowsAdapter?.updateRows(currentRowsRef)
+                rowsRecyclerView.requestLayout()
+                run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
+                updateSaveButtonState()
             } else {
-                // No valid layout found - this shouldn't happen, but handle it gracefully
                 android.util.Log.e("TextKeyboardEditor", "No valid layout found in entries")
             }
             return
         }
 
-        // Update the mutable reference for drag callback
         currentRowsRef = rows
 
         // Setup RecyclerView (only once)

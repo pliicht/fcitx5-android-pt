@@ -65,6 +65,7 @@ class ButtonsCustomizerActivity : AppCompatActivity() {
     private val toolbar by lazy {
         Toolbar(this).apply {
             backgroundColor = styledColor(android.R.attr.colorPrimary)
+            setTitleTextColor(styledColor(android.R.attr.textColorPrimary))
             elevation = dp(4f)
         }
     }
@@ -803,7 +804,7 @@ class ButtonEntryUi(
     val labelView = textView {
         textSize = 12f
         gravity = gravityCenter
-        setTextColor(theme.keyTextColor)
+        setTextColor(ctx.styledColor(android.R.attr.textColorPrimary))
         text = label
         visibility = if (label.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
     }
@@ -842,9 +843,9 @@ class ButtonEntryUi(
     }
 
     private fun updateColors() {
-        // Use same colors as Status Area - no active state needed
-        val contentColor = theme.keyTextColor
-        val bgColor = theme.keyBackgroundColor
+        // Use system theme colors for better visibility in light/dark mode
+        val contentColor = ctx.styledColor(android.R.attr.textColorPrimary)
+        val bgColor = ctx.styledColor(android.R.attr.colorPrimary)
 
         bkgDrawable.paint.color = bgColor
         labelView.setTextColor(contentColor)
@@ -853,7 +854,7 @@ class ButtonEntryUi(
 
     private fun updateIcon() {
         bkg.removeAllViews()
-        val contentColor = theme.keyTextColor
+        val contentColor = ctx.styledColor(android.R.attr.textColorPrimary)
 
         if (iconRes != 0) {
             icon.visibility = android.view.View.VISIBLE

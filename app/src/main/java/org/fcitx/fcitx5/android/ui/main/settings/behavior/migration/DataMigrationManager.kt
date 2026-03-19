@@ -15,21 +15,21 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 数据迁移管理器，负责键盘布局数据的迁移、备份和恢复。
- * 
- * 迁移策略：
- * 1. 对于已有子模式布局的（如 "rime:倉頡五代"）：
- *    - 从基础布局提取 displayText 值到对应的子模式布局
- *    - 将基础布局的 displayText 转换为简单字符串或删除
- * 2. 对于没有子模式布局的：
- *    - 保持 displayText 原格式，向后兼容
- * 
- * 主要功能：
- * - [checkIfMigrationNeeded] - 检测是否需要迁移
- * - [backupOriginalFile] - 备份原始文件
- * - [restoreFromBackup] - 从备份恢复
- * - [migrateAllDisplayTextToSubmodeStructure] - 执行迁移
- * - [parseJsonToEntries] - 解析 JSON 到数据结构
+ * Data migration manager responsible for keyboard layout data migration, backup, and restoration.
+ *
+ * Migration strategy:
+ * 1. For layouts with existing submode layouts (e.g., "rime:倉頡五代"):
+ *    - Extract displayText values from base layout to corresponding submode layouts
+ *    - Convert base layout displayText to simple strings or remove them
+ * 2. For layouts without submode layouts:
+ *    - Keep displayText in original format for backward compatibility
+ *
+ * Main functions:
+ * - [checkIfMigrationNeeded] - Check if migration is needed
+ * - [createBackup] - Create timestamped backup (called on every save)
+ * - [restoreFromBackup] - Restore from backup
+ * - [migrateAllDisplayTextToSubmodeStructure] - Execute migration
+ * - [parseJsonToEntries] - Parse JSON to data structure
  */
 class DataMigrationManager(
     private val dataManager: LayoutDataManager
@@ -40,7 +40,37 @@ class DataMigrationManager(
     }
 
     private val entries = dataManager.entries
-    private var backupFile: File? = null
+    private var lastBackupFile: File? = null
+
+    /**
+     * Create a timestamped backup file.
+     *
+     * Backup file name format: `{originalFileName}_backup_{timestamp}.json`
+     * Example: `TextKeyboardLayout_backup_20260317_143022.json`
+     *
+     * This method should be called on every save to create a backup.
+     * Old backups are automatically cleaned up, keeping only the latest N backups.
+     *
+     * @param originalFile The original file to backup
+     * @return The backup file, or null if failed
+     */
+    fun createBackup(originalFile: File): File? {
+        return runCatching {
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val backupFileName = "${originalFile.nameWithoutExtension}_backup_$timestamp.json"
+            val backupFile = File(originalFile.parentFile, backupFileName)
+
+            originalFile.copyTo(backupFile, overwrite = false)
+            Log.i(TAG, "Backup created: ${backupFile.absolutePath}")
+
+            this.lastBackupFile = backupFile
+            cleanupOldBackups(originalFile)
+
+            backupFile
+        }.onFailure { e ->
+            Log.e(TAG, "Failed to create backup", e)
+        }.getOrNull()
+    }
 
     /**
      * 检测是否需要迁移。
@@ -77,33 +107,6 @@ class DataMigrationManager(
     }
 
     /**
-     * 备份原始文件。
-     * 
-     * 备份文件名格式：`{原文件名}_backup_{时间戳}.json`
-     * 示例：`TextKeyboardLayout_backup_20260317_143022.json`
-     * 
-     * @param originalFile 原始文件
-     * @return 备份文件，失败时返回 null
-     */
-    fun backupOriginalFile(originalFile: File): File? {
-        return runCatching {
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val backupFileName = "${originalFile.nameWithoutExtension}_backup_$timestamp.json"
-            val backupFile = File(originalFile.parentFile, backupFileName)
-
-            originalFile.copyTo(backupFile, overwrite = false)
-            Log.i(TAG, "Backup created: ${backupFile.absolutePath}")
-
-            this.backupFile = backupFile
-            cleanupOldBackups(originalFile)
-
-            backupFile
-        }.onFailure { e ->
-            Log.e(TAG, "Failed to create backup", e)
-        }.getOrNull()
-    }
-
-    /**
      * Clean up old backup files, keeping only the latest N backups.
      */
     private fun cleanupOldBackups(originalFile: File) {
@@ -129,30 +132,44 @@ class DataMigrationManager(
     }
 
     /**
-     * 从备份恢复文件。
-     * 
-     * @param targetFile 要恢复到的目标文件
+     * Restore from the latest backup file.
+     *
+     * @param targetFile The target file to restore to
      */
     fun restoreFromBackup(targetFile: File?) {
-        if (targetFile == null || backupFile == null) return
+        if (targetFile == null) return
+
+        // Find the latest backup file
+        val backupPattern = "${targetFile.nameWithoutExtension}_backup_"
+        val latestBackup = targetFile.parentFile
+            ?.listFiles { file ->
+                file.name.startsWith(backupPattern) && file.name.endsWith(".json")
+            }
+            ?.sortedByDescending { it.lastModified() }
+            ?.firstOrNull()
+
+        if (latestBackup == null || !latestBackup.exists()) {
+            Log.w(TAG, "No backup file found for restoration")
+            return
+        }
 
         runCatching {
-            backupFile?.takeIf { it.exists() }?.copyTo(targetFile, overwrite = true)
-            Log.i(TAG, "Restored from backup: ${backupFile?.absolutePath}")
+            latestBackup.copyTo(targetFile, overwrite = true)
+            Log.i(TAG, "Restored from backup: ${latestBackup.absolutePath}")
         }.onFailure { e ->
             Log.e(TAG, "Failed to restore from backup", e)
         }
     }
 
     /**
-     * 自动迁移旧格式到新子模式结构。
-     * 
-     * 迁移策略：
-     * 1. 对于有子模式布局的：
-     *    - 提取基础布局的 displayText 值到对应子模式布局
-     *    - 转换基础布局 displayText 为简单字符串或删除
-     * 2. 对于没有子模式布局的：
-     *    - 保持 displayText 原格式，向后兼容
+     * Automatically migrate old displayText format to new submode structure.
+     *
+     * Migration strategy:
+     * 1. For layouts with submode layouts:
+     *    - Extract displayText values from base layout to corresponding submode layouts
+     *    - Convert base layout displayText to simple strings or remove them
+     * 2. For layouts without submode layouts:
+     *    - Keep displayText in original format for backward compatibility
      */
     fun migrateAllDisplayTextToSubmodeStructure() {
         val layoutGroups = entries.keys.groupBy { key ->
@@ -249,7 +266,10 @@ class DataMigrationManager(
 
     /**
      * Normalize displayText from JsonObject to Map<String, Any?> for consistent handling.
+     *
+     * Note: The cast is safe because JSON keys are always strings.
      */
+    @Suppress("UNCHECKED_CAST")
     private fun normalizeDisplayTextToMap(layoutKey: String) {
         val layout = entries[layoutKey] ?: return
         for (row in layout) {

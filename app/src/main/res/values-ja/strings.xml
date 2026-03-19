@@ -370,4 +370,8 @@
     <string name="split_keyboard_reset_toast">デフォルト値にリセットしました</string>
     <string name="split_keyboard_apply_toast">保存済み：閾値 %1$ddp、間隙 %2$d%%%3$s</string>
     <string name="split_keyboard_apply_note_disabled">（注：分割キーボードは無効です）</string>
+    <string name="text_keyboard_layout_submode_already_exists">サブモード "%1$s" の専用レイアウトが既に存在します</string>
+    <string name="text_keyboard_layout_delete_submode_layout_confirm">サブモードレイアウト "%1$s" を削除しますか？</string>
+    <string name="text_keyboard_layout_editing_submode">サブモード "%1$s" の専用レイアウトを編集中</string>
+    <string name="text_keyboard_layout_editing_default">"%1$s" のデフォルトレイアウトを編集中</string>
 </resources>

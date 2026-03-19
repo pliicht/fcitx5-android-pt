@@ -17,7 +17,6 @@ import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -94,42 +93,24 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
     }
 
     private val rowsRecyclerView by lazy {
-        object : RecyclerView(this) {
-            override fun onMeasure(widthSpec: Int, heightSpec: Int) {
-                // Expand to fit all content when inside ScrollView
-                val expandSpec = MeasureSpec.makeMeasureSpec(
-                    Int.MAX_VALUE shr 2,
-                    MeasureSpec.AT_MOST
-                )
-                super.onMeasure(widthSpec, expandSpec)
-            }
-        }.apply {
+        RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@TextKeyboardLayoutEditorActivity)
-            isNestedScrollingEnabled = false
-            isFocusableInTouchMode = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+                0
+            ).apply {
+                weight = 1f
+            }
         }
     }
 
+    // Single spinner container for both layout and submode spinners
     private val spinnerContainer by lazy {
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
             val pad = dp(8)
             setPadding(0, pad, 0, pad)
-        }
-    }
-
-    private val subModeContainer by lazy {
-        LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
-            val pad = dp(8)
-            setPadding(0, pad, 0, pad)
-            visibility = View.GONE
         }
     }
 
@@ -172,19 +153,6 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         }
     }
 
-    private val scrollView by lazy {
-        ScrollView(this).apply {
-            isFillViewport = true
-            addView(
-                listContainer,
-                android.widget.FrameLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-            )
-        }
-    }
-
     private val ui by lazy {
         LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -197,7 +165,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams(matchParent, wrapContent)
             )
             addView(
-                scrollView,
+                listContainer,
                 LinearLayout.LayoutParams(matchParent, 0).apply { weight = 1f }
             )
         }
@@ -362,10 +330,8 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         val needsMigration = file != null && migrationManager.checkIfMigrationNeeded()
 
         // Only backup if migration is actually needed
-        val backupFile = if (needsMigration) {
-            migrationManager.backupOriginalFile(file!!)
-        } else {
-            null
+        if (needsMigration) {
+            migrationManager.createBackup(file!!)
         }
 
         // Migrate old displayText format to new submode structure
@@ -374,7 +340,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             migrationManager.migrateAllDisplayTextToSubmodeStructure()
         } catch (e: Exception) {
             android.util.Log.e("TextKeyboardEditor", "Migration failed, restoring backup", e)
-            backupFile?.let { migrationManager.restoreFromBackup(file) }
+            migrationManager.restoreFromBackup(file)
             // Re-parse the restored file
             val restoredParsed = runCatching {
                 val jsonStr = file!!.readText()
@@ -526,33 +492,30 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                 buildRows()
                 run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
 
-                // Show toast when switching IME/layout
-                if (newLayout != oldLayout) {
-                    val layoutName = currentLayout ?: return@onItemSelected
-                    val subModeKey = "$layoutName:${previewSubModeLabel ?: "default"}"
-                    val newEditingTarget = if (entries.containsKey(subModeKey)) {
-                        subModeKey
-                    } else {
-                        "$layoutName:default"
-                    }
+                // Show toast when switching IME/layout - only if editing target changed
+                val layoutName = currentLayout ?: return@onItemSelected
+                val subModeKey = "$layoutName:${previewSubModeLabel ?: "default"}"
+                val newEditingTarget = if (entries.containsKey(subModeKey)) {
+                    subModeKey
+                } else {
+                    "$layoutName:default"
+                }
 
-                    // Only show toast if the editing target changed
-                    if (newEditingTarget != lastEditingTarget) {
-                        lastEditingTarget = newEditingTarget
-                        if (entries.containsKey(subModeKey)) {
-                            showToast(getString(R.string.text_keyboard_layout_editing_submode, previewSubModeLabel ?: "default"))
-                        } else {
-                            showToast(getString(R.string.text_keyboard_layout_editing_default, layoutName))
-                        }
+                // Only show toast if the editing target changed
+                if (newEditingTarget != lastEditingTarget) {
+                    lastEditingTarget = newEditingTarget
+                    if (entries.containsKey(subModeKey)) {
+                        showToast(getString(R.string.text_keyboard_layout_editing_submode, previewSubModeLabel ?: "default"))
+                    } else {
+                        showToast(getString(R.string.text_keyboard_layout_editing_default, layoutName))
                     }
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
-        // Remove from current parent first to avoid "child already has a parent" exception
-        (layoutSpinner.parent as? ViewGroup)?.removeView(layoutSpinner)
-        (addLayoutButton.parent as? ViewGroup)?.removeView(addLayoutButton)
-        (deleteLayoutButton.parent as? ViewGroup)?.removeView(deleteLayoutButton)
+        
+        // Build the fixed spinner container structure
+        spinnerContainer.removeAllViews()
         spinnerContainer.addView(layoutSpinner)
         spinnerContainer.addView(addLayoutButton)
         spinnerContainer.addView(deleteLayoutButton)
@@ -591,57 +554,79 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             }
         }
 
-        subModeContainer.removeAllViews()
-        subModeContainer.visibility = View.VISIBLE
+        // Show submode spinner - add it after layoutSpinner, before buttons
+        subModeSpinner.visibility = View.VISIBLE
 
-        // Add layout spinner (left side) - remove from parent first if needed
-        (layoutSpinner.parent as? ViewGroup)?.removeView(layoutSpinner)
-        // Ensure layoutSpinner has correct layoutParams for subModeContainer
-        layoutSpinner.layoutParams = LinearLayout.LayoutParams(
-            0, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { weight = 1f }
-        subModeContainer.addView(layoutSpinner)
+        // Remove and re-add to ensure correct position
+        (subModeSpinner.parent as? ViewGroup)?.removeView(subModeSpinner)
+        spinnerContainer.addView(subModeSpinner, 1) // Add after layoutSpinner
 
-        // Add spacer
-        subModeContainer.addView(createSubModeSpacer())
-
-        // Add submode spinner (right side)
+        // Bind submode spinner data
         bindSubModeSpinner(labels)
-        subModeContainer.addView(subModeSpinner)
+        
+        // Update button behavior for submode
+        updateLayoutButtonBehavior()
+    }
 
-        // Add add button
-        subModeContainer.addView(createAddSubModeButton())
+    private fun hideSubModeSpinner() {
+        subModeSpinner.visibility = View.GONE
 
-        // Add delete button
-        subModeContainer.addView(createDeleteSubModeButton())
+        // Remove submode spinner from container
+        (subModeSpinner.parent as? ViewGroup)?.removeView(subModeSpinner)
 
-        // Hide the original spinnerContainer to avoid duplicate space
-        spinnerContainer.visibility = View.GONE
+        // Reset submode state to ensure consistency
+        previewSubModeLabel = null
+
+        // Restore button behavior for base layout
+        updateLayoutButtonBehavior()
+    }
+
+    /**
+     * Update the behavior of add/delete layout buttons based on current submode state.
+     * - When a submode is selected and has no dedicated layout: "+" adds submode layout
+     * - When a submode is selected and has dedicated layout: "🗑" deletes submode layout
+     * - Otherwise: buttons work on base layout
+     */
+    private fun updateLayoutButtonBehavior() {
+        val layoutName = currentLayout ?: return
+        val subModeLabel = previewSubModeLabel?.takeIf { it.isNotBlank() }
+        
+        if (subModeLabel != null) {
+            val subModeKey = "$layoutName:$subModeLabel"
+            val hasSubModeLayout = entries.containsKey(subModeKey)
+            
+            // Update add button: add submode layout if it doesn't exist
+            if (!hasSubModeLayout) {
+                addLayoutButton.setOnClickListener { addSubModeForCurrentSelection() }
+                addLayoutButton.alpha = 1.0f
+            } else {
+                // Submode layout already exists - disable add button or show info
+                addLayoutButton.setOnClickListener {
+                    showToast(getString(R.string.text_keyboard_layout_submode_already_exists, subModeLabel))
+                }
+                addLayoutButton.alpha = 0.5f
+            }
+            
+            // Update delete button: delete submode layout if it exists, otherwise delete base layout
+            deleteLayoutButton.setOnClickListener {
+                if (hasSubModeLayout) {
+                    confirmDeleteSubModeLayout(layoutName, subModeLabel)
+                } else {
+                    confirmDeleteBaseLayout(layoutName)
+                }
+            }
+        } else {
+            // No submode selected - restore default behavior
+            addLayoutButton.setOnClickListener { openLayoutEditor(null) }
+            addLayoutButton.alpha = 1.0f
+            deleteLayoutButton.setOnClickListener { confirmDeleteCurrentEditingLayout() }
+        }
     }
 
     private data class SubModeState(
         val currentIme: InputMethodEntry?,
         val labels: List<String>
     )
-
-    private fun hideSubModeSpinner() {
-        subModeContainer.removeAllViews()
-        subModeContainer.visibility = View.GONE
-        previewSubModeLabel = null
-
-        // Restore layoutSpinner to spinnerContainer if not already there
-        if (layoutSpinner.parent != spinnerContainer) {
-            (layoutSpinner.parent as? ViewGroup)?.removeView(layoutSpinner)
-            // Ensure layoutSpinner has correct layoutParams for spinnerContainer
-            layoutSpinner.layoutParams = LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { weight = 1f }
-            spinnerContainer.addView(layoutSpinner, 0)
-        }
-
-        // Show the original spinnerContainer
-        spinnerContainer.visibility = View.VISIBLE
-    }
 
     private fun bindSubModeSpinner(labels: List<String>) {
         val adapter = ArrayAdapter(
@@ -757,24 +742,24 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
     private fun confirmDeleteCurrentEditingLayout() {
         val layoutName = currentLayout ?: return
-        
+
         // Determine what to delete based on current previewSubModeLabel (what user is currently editing)
         val currentSubModeLabel = previewSubModeLabel?.takeIf { it.isNotBlank() }
-        
+
         // Check if we have a submode-specific layout to delete
         val subModeKey = if (currentSubModeLabel != null && currentSubModeLabel != "default") {
             "$layoutName:$currentSubModeLabel"
         } else {
             null
         }
-        
+
         val keyToDelete = if (subModeKey != null && entries.containsKey(subModeKey)) {
             subModeKey
         } else {
             // Delete the base layout (default)
             layoutName
         }
-        
+
         val displayName = if (subModeKey != null && entries.containsKey(subModeKey)) {
             "$layoutName ($currentSubModeLabel)"
         } else {
@@ -813,7 +798,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                         currentLayout = entries.keys.firstOrNull { !it.contains(':') }
                         previewSubModeLabel = null
                         lastEditingTarget = currentLayout?.let { "$it:default" }
-                        
+
                         // If no layouts left, load default from TextKeyboard.kt
                         if (currentLayout == null) {
                             val defaultLayout = readDefaultPresetFromTextKeyboardKt()
@@ -853,12 +838,76 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                     lastEditingTarget = "$currentLayout:default"
                 }
 
-                android.util.Log.d("TextKeyboardEditor", "After delete: currentLayout=$currentLayout, entries.keys=${entries.keys.toList()}")
-
                 buildSpinner()
-                buildSubModeSpinner()
+                buildSubModeSpinner(forceResetSelection = true)
                 buildRows()
                 run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
+                updateSaveButtonState()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Confirm and delete a submode-specific layout.
+     */
+    private fun confirmDeleteSubModeLayout(layoutName: String, subModeLabel: String) {
+        val subModeKey = "$layoutName:$subModeLabel"
+        AlertDialog.Builder(this)
+            .setTitle(R.string.delete)
+            .setMessage(getString(R.string.text_keyboard_layout_delete_submode_layout_confirm, subModeLabel))
+            .setPositiveButton(R.string.delete) { _, _ ->
+                entries.remove(subModeKey)
+                
+                // Switch to default or first available submode
+                val remainingLabels = extractSubModeLabelsFromCurrentLayout()
+                previewSubModeLabel = remainingLabels.firstOrNull()
+                lastEditingTarget = previewSubModeLabel?.let { "$layoutName:$it" } ?: "$layoutName:default"
+                
+                buildSubModeSpinner(forceResetSelection = true)
+                buildRows()
+                run { val name = currentLayout ?: return@run; previewManager.updatePreview(name, previewSubModeLabel, fcitxConnection) }
+                updateSaveButtonState()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Confirm and delete the base layout.
+     */
+    private fun confirmDeleteBaseLayout(layoutName: String) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.delete)
+            .setMessage(getString(R.string.text_keyboard_layout_delete_layout_confirm, layoutName))
+            .setPositiveButton(R.string.delete) { _, _ ->
+                // Remove base layout and all submode layouts
+                val allKeysForIme = entries.keys.filter {
+                    it == layoutName || it.startsWith("$layoutName:")
+                }.toList()
+                allKeysForIme.forEach { entries.remove(it) }
+
+                // Switch to another base layout
+                currentLayout = entries.keys.firstOrNull { !it.contains(':') }
+                previewSubModeLabel = null
+                lastEditingTarget = currentLayout?.let { "$it:default" }
+
+                // If no layouts left, load default from TextKeyboard.kt
+                if (currentLayout == null) {
+                    val defaultLayout = readDefaultPresetFromTextKeyboardKt()
+                    defaultLayout.forEach { (k, v) ->
+                        entries[k] = v.map { row ->
+                            row.map { key -> key.toMutableMap() }.toMutableList()
+                        }.toMutableList()
+                    }
+                    currentLayout = "default"
+                    lastEditingTarget = "default:default"
+                }
+
+                buildSpinner()
+                buildSubModeSpinner(forceResetSelection = true)
+                buildRows()
+                run { val name = currentLayout ?: return@run; previewManager.updatePreview(name, previewSubModeLabel, fcitxConnection) }
                 updateSaveButtonState()
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -1094,10 +1143,13 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
         currentRowsRef = rows
 
-        // Setup RecyclerView (only once)
+        // Setup views (only once)
         if (rowsAdapter == null) {
+            // Clear and rebuild content
+            listContainer.removeAllViews()
+
+            // Add spinner container to list container
             listContainer.addView(spinnerContainer)
-            listContainer.addView(subModeContainer)
 
             // Add divider between spinner and content
             val divider = View(this).apply {
@@ -1115,36 +1167,23 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             rowsRecyclerView.addItemDecoration(SimpleDividerItemDecoration(this))
             listContainer.addView(rowsRecyclerView)
 
-            // Add row button
-            val addRowButton = TextView(this).apply {
-                text = getString(R.string.text_keyboard_layout_add_row)
-                textSize = 16f
-                setTypeface(null, android.graphics.Typeface.BOLD)
-                setPadding(dp(12), dp(8), dp(12), dp(8))
-                gravity = android.view.Gravity.CENTER
-                setOnClickListener { addRow() }
-            }
-            listContainer.addView(addRowButton, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = android.view.Gravity.CENTER_HORIZONTAL
-                topMargin = dp(16)
-                bottomMargin = dp(8)
-            })
-
             // Setup drag helper - uses currentRowsRef which is updated on each buildRows()
             rowTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
                 ItemTouchHelper.UP or ItemTouchHelper.DOWN,
                 0
             ) {
                 override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                    // Don't allow dragging if either viewHolder is AddRowViewHolder (footer)
+                    if (viewHolder is AddRowViewHolder || target is AddRowViewHolder) {
+                        return false
+                    }
+                    
                     // Check if either the current or target ViewHolder contains a DraggableFlowLayout that is currently dragging
                     // Cast the ViewHolder to RowViewHolder to access the keysFlow field
                     if (viewHolder is RowViewHolder && target is RowViewHolder) {
                         val currentKeysFlow = viewHolder.keysFlow
                         val targetKeysFlow = target.keysFlow
-                        
+
                         if ((currentKeysFlow is DraggableFlowLayout && currentKeysFlow.isDragging) ||
                             (targetKeysFlow is DraggableFlowLayout && targetKeysFlow.isDragging)) {
                             // If either row has a flow layout that's currently dragging keys,
@@ -1152,7 +1191,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                             return false
                         }
                     }
-                    
+
                     val fromPosition = viewHolder.bindingAdapterPosition
                     val toPosition = target.bindingAdapterPosition
                     if (fromPosition < 0 || toPosition < 0 || fromPosition >= currentRowsRef.size || toPosition >= currentRowsRef.size) return false
@@ -1170,7 +1209,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
                 override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
                     super.onSelectedChanged(viewHolder, actionState)
-                    if (actionState == ItemTouchHelper.ACTION_STATE_DRAG && viewHolder != null) {
+                    if (actionState == ItemTouchHelper.ACTION_STATE_DRAG && viewHolder is RowViewHolder) {
                         // Highlight the dragged row
                         viewHolder.itemView.setBackgroundColor(
                             this@TextKeyboardLayoutEditorActivity.styledColor(android.R.attr.colorControlHighlight)
@@ -1187,9 +1226,13 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                     run { val layoutName = currentLayout ?: return@run; previewManager.updatePreview(layoutName, previewSubModeLabel, fcitxConnection) }
                     updateSaveButtonState() // Update save button state
                 }
-                
+
                 // Override to check if touch is on draggable flow layout
                 override fun canDropOver(recyclerView: RecyclerView, current: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                    // Don't allow dropping on AddRowViewHolder (footer)
+                    if (target is AddRowViewHolder) {
+                        return false
+                    }
                     // Check if the target ViewHolder contains a DraggableFlowLayout that is currently dragging
                     if (target is RowViewHolder) {
                         val keysFlow = target.keysFlow
@@ -1220,6 +1263,9 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
 
         // Force RecyclerView to re-measure
         rowsRecyclerView.requestLayout()
+        
+        // Update button behavior based on current submode state
+        updateLayoutButtonBehavior()
     }
 
     // Simple divider without animation issues
@@ -1234,7 +1280,9 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             val left = parent.paddingLeft
             val right = parent.width - parent.paddingRight
 
-            for (i in 0 until parent.childCount) {
+            // Don't draw divider after the last item (add row button)
+            val childCount = parent.childCount - 1
+            for (i in 0 until childCount) {
                 val child = parent.getChildAt(i)
                 val params = child.layoutParams as RecyclerView.LayoutParams
                 val top = child.bottom + params.bottomMargin
@@ -1244,20 +1292,42 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         }
 
         override fun getItemOffsets(outRect: android.graphics.Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
-            outRect.set(0, 0, 0, dividerHeight)
+            // Don't add offset for the last item (add row button)
+            val position = parent.getChildAdapterPosition(view)
+            val adapter = parent.adapter
+            if (adapter != null && position == adapter.itemCount - 1) {
+                outRect.set(0, 0, 0, 0)
+            } else {
+                outRect.set(0, 0, 0, dividerHeight)
+            }
         }
     }
 
     private inner class RowsAdapter(
         var rows: List<MutableList<MutableMap<String, Any?>>>
-    ) : RecyclerView.Adapter<RowViewHolder>() {
+    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+        private val VIEW_TYPE_ROW = 0
+        private val VIEW_TYPE_ADD_ROW = 1
 
         fun updateRows(newRows: List<MutableList<MutableMap<String, Any?>>>) {
             rows = newRows
             notifyDataSetChanged()
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RowViewHolder {
+        override fun getItemViewType(position: Int): Int {
+            return if (position == rows.size) VIEW_TYPE_ADD_ROW else VIEW_TYPE_ROW
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            return when (viewType) {
+                VIEW_TYPE_ROW -> createRowViewHolder(parent)
+                VIEW_TYPE_ADD_ROW -> createAddRowViewHolder(parent)
+                else -> throw IllegalArgumentException("Unknown view type: $viewType")
+            }
+        }
+
+        private fun createRowViewHolder(parent: ViewGroup): RowViewHolder {
             val rowContainer = LinearLayout(this@TextKeyboardLayoutEditorActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
@@ -1311,7 +1381,44 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             return RowViewHolder(rowContainer, dragHandle, keysFlow, deleteRowButton)
         }
 
-        override fun onBindViewHolder(holder: RowViewHolder, position: Int) {
+        private fun createAddRowViewHolder(parent: ViewGroup): AddRowViewHolder {
+            val addRowButton = TextView(this@TextKeyboardLayoutEditorActivity).apply {
+                text = getString(R.string.text_keyboard_layout_add_row)
+                textSize = 16f
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                gravity = android.view.Gravity.CENTER
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(styledColor(android.R.attr.colorPrimary))
+                    setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                    cornerRadius = dp(4).toFloat()
+                }
+                setOnClickListener { addRow() }
+            }
+            val container = LinearLayout(this@TextKeyboardLayoutEditorActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                setPadding(0, dp(16), 0, dp(8))
+                addView(addRowButton, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = android.view.Gravity.CENTER
+                })
+            }
+            return AddRowViewHolder(container, addRowButton)
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            when (holder) {
+                is RowViewHolder -> bindRowViewHolder(holder, position)
+                is AddRowViewHolder -> {
+                    // Add row button doesn't need binding, click listener is set in onCreateViewHolder
+                }
+            }
+        }
+
+        private fun bindRowViewHolder(holder: RowViewHolder, position: Int) {
             val row = rows[position]
             holder.keysFlow.removeAllViews()
 
@@ -1333,7 +1440,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                         true
                     }
                 }
-                
+
                 holder.keysFlow.addView(keyChip, ViewGroup.MarginLayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
@@ -1410,7 +1517,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             holder.dragHandle.setOnLongClickListener {
                 startRowDragIfAllowed()
             }
-            
+
             // Keep key drag behavior, but allow row drag when long-press starts in keysFlow blank area.
             holder.keysFlow.setOnTouchListener { _, event ->
                 when (event.action) {
@@ -1440,14 +1547,19 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             }
         }
 
-        override fun getItemCount(): Int = rows.size
+        override fun getItemCount(): Int = rows.size + 1  // +1 for add row button
     }
 
     private data class RowViewHolder(
         val container: LinearLayout,
         val dragHandle: TextView,
-        val keysFlow: ViewGroup,  // Changed to ViewGroup to support both FlowLayout and DraggableFlowLayout
+        val keysFlow: ViewGroup,
         val deleteButton: TextView
+    ) : RecyclerView.ViewHolder(container)
+
+    private data class AddRowViewHolder(
+        val container: LinearLayout,
+        val addRowButton: TextView
     ) : RecyclerView.ViewHolder(container)
 
     private fun ViewGroup.isTouchOnAnyChild(x: Float, y: Float): Boolean {
@@ -2384,20 +2496,24 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             return
         }
 
+        val file = layoutFile ?: run {
+            showToast(getString(R.string.cannot_resolve_text_keyboard_layout))
+            return
+        }
+
+        // Create timestamped backup before saving
+        migrationManager.createBackup(file)
+
         // Clean up base layout's displayText entries that are covered by submode layouts
         // This migrates old displayText: {} format to new submode structure
         val baseLayoutNames = entries.keys.map { key ->
             if (key.contains(':')) key.substringBeforeLast(':') else key
         }.distinct()
-        
+
         baseLayoutNames.forEach { layoutName ->
             migrationManager.cleanupBaseLayoutDisplayText(layoutName)
         }
 
-        val file = layoutFile ?: run {
-            showToast(getString(R.string.cannot_resolve_text_keyboard_layout))
-            return
-        }
         file.parentFile?.mkdirs()
 
         val jsonElement = LayoutJsonUtils.convertToSaveJson(entries)

@@ -239,6 +239,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                         FcitxKeyMapping.FcitxKey_Return -> handleReturnKey()
                         FcitxKeyMapping.FcitxKey_Left -> handleArrowKey(KeyEvent.KEYCODE_DPAD_LEFT)
                         FcitxKeyMapping.FcitxKey_Right -> handleArrowKey(KeyEvent.KEYCODE_DPAD_RIGHT)
+                        FcitxKeyMapping.FcitxKey_Up -> handleArrowKey(KeyEvent.KEYCODE_DPAD_UP)
+                        FcitxKeyMapping.FcitxKey_Down -> handleArrowKey(KeyEvent.KEYCODE_DPAD_DOWN)
                         else -> if (it.unicode > 0) {
                             commitText(Character.toString(it.unicode))
                         } else {
@@ -404,6 +406,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val target = when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> start - offset
             KeyEvent.KEYCODE_DPAD_RIGHT -> end + offset
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                // For up/down, just send the key event to move by line
+                sendDownUpKeyEvents(keyCode)
+                return
+            }
             else -> return
         }
         currentInputConnection.setSelection(target, target)

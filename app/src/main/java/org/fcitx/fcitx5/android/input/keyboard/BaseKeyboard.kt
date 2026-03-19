@@ -28,6 +28,7 @@ import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.input.font.FontProviders
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.GestureType
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.OnGestureListener
+import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.SwipeAxis
 import org.fcitx.fcitx5.android.input.popup.PopupAction
 import org.fcitx.fcitx5.android.input.popup.PopupActionListener
 import org.fcitx.fcitx5.android.utils.DeviceInfoCollector
@@ -529,21 +530,63 @@ abstract class BaseKeyboard(
                 swipeEnabled = spaceSwipeMoveCursor.getValue()
                 swipeRepeatEnabled = true
                 swipeThresholdX = selectionSwipeThreshold
-                swipeThresholdY = disabledSwipeThreshold
+                // Use a larger threshold for Y axis to avoid accidental up/down triggers
+                // when user intends to swipe left/right
+                swipeThresholdY = selectionSwipeThreshold * 1.5f
+                // Track the locked swipe direction to avoid conflicting gestures
+                var swipeDirectionLocked: SwipeAxis? = null
                 onGestureListener = OnGestureListener { view, event ->
                     when (event.type) {
-                        GestureType.Move -> when (val count = event.countX) {
-                            0 -> false
-                            else -> {
-                                val sym =
-                                    if (count > 0) FcitxKeyMapping.FcitxKey_Right else FcitxKeyMapping.FcitxKey_Left
-                                val action = KeyAction.SymAction(KeySym(sym), KeyStates.Virtual)
-                                repeat(count.absoluteValue) {
-                                    onAction(action)
-                                    if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
+                        GestureType.Move -> {
+                            val countX = event.countX
+                            val countY = event.countY
+
+                            // Lock direction on first swipe
+                            if (swipeDirectionLocked == null && (countX != 0 || countY != 0)) {
+                                swipeDirectionLocked = if (kotlin.math.abs(countX) >= kotlin.math.abs(countY)) {
+                                    SwipeAxis.X
+                                } else {
+                                    SwipeAxis.Y
                                 }
-                                true
                             }
+
+                            val handled = when (swipeDirectionLocked) {
+                                SwipeAxis.X -> {
+                                    if (countX != 0) {
+                                        val sym =
+                                            if (countX > 0) FcitxKeyMapping.FcitxKey_Right else FcitxKeyMapping.FcitxKey_Left
+                                        val action = KeyAction.SymAction(KeySym(sym), KeyStates.Virtual)
+                                        repeat(countX.absoluteValue) {
+                                            onAction(action)
+                                            if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                SwipeAxis.Y -> {
+                                    if (countY != 0) {
+                                        val sym =
+                                            if (countY > 0) FcitxKeyMapping.FcitxKey_Down else FcitxKeyMapping.FcitxKey_Up
+                                        val action = KeyAction.SymAction(KeySym(sym), KeyStates.Virtual)
+                                        repeat(countY.absoluteValue) {
+                                            onAction(action)
+                                            if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                null -> false
+                            }
+                            handled
+                        }
+                        GestureType.Up -> {
+                            // Reset direction lock on finger up
+                            swipeDirectionLocked = null
+                            false
                         }
                         else -> false
                     }

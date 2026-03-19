@@ -424,7 +424,9 @@ class SplitKeyboardCalibrationActivity : AppCompatActivity() {
 
         try {
             val theme = ThemeManager.activeTheme
-            previewKeyboardContainer.setBackgroundColor(theme.barColor)
+            val keyBorder = ThemeManager.prefs.keyBorder.getValue()
+            // Match InputView behavior: use backgroundColor when keyBorder is true, otherwise keyboardColor
+            previewKeyboardContainer.setBackgroundColor(if (keyBorder) theme.backgroundColor else theme.keyboardColor)
 
             val displayMetrics = resources.displayMetrics
             val screenHeight = displayMetrics.heightPixels

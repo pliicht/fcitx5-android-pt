@@ -99,7 +99,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val pad = dp(8)
+            val pad = dp(4)
             setPadding(0, pad, 0, pad)
         }
     }
@@ -108,6 +108,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         Spinner(this).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 weight = 1f
+                setMargins(0, 0, 0, 0)
             }
         }
     }
@@ -116,6 +117,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         Spinner(this).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 weight = 1f
+                setMargins(0, 0, 0, 0)
             }
         }
     }
@@ -125,7 +127,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             text = "+"
             textSize = 14f
             setTypeface(null, android.graphics.Typeface.BOLD)
-            setPadding(dp(12), dp(6), dp(12), dp(6))
+            setPadding(dp(12), dp(4), dp(12), dp(4))
             minWidth = dp(40)
             gravity = Gravity.CENTER
             setOnClickListener { openLayoutEditor(null) }
@@ -136,7 +138,7 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
         TextView(this).apply {
             text = "🗑"
             textSize = 14f
-            setPadding(dp(12), dp(6), dp(12), dp(6))
+            setPadding(dp(12), dp(4), dp(12), dp(4))
             minWidth = dp(40)
             gravity = Gravity.CENTER
             setOnClickListener { confirmDeleteCurrentEditingLayout() }

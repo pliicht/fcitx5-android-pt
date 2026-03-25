@@ -51,9 +51,6 @@ class KeyboardLayoutAdapter(
         /** Called when a key is clicked */
         fun onKeyClick(rowIndex: Int, keyIndex: Int)
 
-        /** Called when a key is long-clicked for deletion */
-        fun onKeyLongClick(rowIndex: Int, keyIndex: Int): Boolean
-
         /** Called when the add key button is clicked */
         fun onAddKeyClick(rowIndex: Int)
 
@@ -229,7 +226,6 @@ class KeyboardLayoutAdapter(
                     cornerRadius = context.dp(4).toFloat()
                 }
                 setOnClickListener { listener.onKeyClick(position, keyIndex) }
-                setOnLongClickListener { listener.onKeyLongClick(position, keyIndex) }
             }
 
             holder.keysFlow.addView(keyChip, ViewGroup.MarginLayoutParams(

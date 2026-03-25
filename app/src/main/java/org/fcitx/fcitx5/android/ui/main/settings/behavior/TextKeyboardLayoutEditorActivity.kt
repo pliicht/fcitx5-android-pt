@@ -948,11 +948,6 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
                     openKeyEditor(rowIndex, keyIndex)
                 }
 
-                override fun onKeyLongClick(rowIndex: Int, keyIndex: Int): Boolean {
-                    confirmDeleteKey(rowIndex, keyIndex)
-                    return true
-                }
-
                 override fun onAddKeyClick(rowIndex: Int) {
                     openKeyEditor(rowIndex, null)
                 }
@@ -1120,80 +1115,36 @@ class TextKeyboardLayoutEditorActivity : AppCompatActivity() {
             fcitxLabels.size > 1
         }
 
+        val isEditing = keyIndex != null
         keyEditorDialog.show(
             keyData = keyData.toMutableMap(),
             isEditingSubModeLayout = isEditingSubModeLayout,
             currentSubModeLabel = previewSubModeLabel,
-            hasMultiSubmodeSupport = hasMultiSubmodeSupport
-        ) { newKey ->
-            // 保存键数据
-            if (keyIndex != null) {
-                row[rowIndex][keyIndex] = newKey
-            } else {
-                row[rowIndex].add(newKey)
-            }
-            buildRows()
-            val name = currentLayout ?: return@show
-            previewManager.updatePreview(name, previewSubModeLabel, fcitxConnection)
-            updateSaveButtonState()
-        }
-    }
-
-    private fun confirmDeleteKey(rowIndex: Int, keyIndex: Int) {
-        val layoutName = currentLayout ?: return
-
-        // Get the correct layout to edit (submode or default)
-        val subModeKey = previewSubModeLabel?.let { "$layoutName:$it" }
-        val row = if (subModeKey != null && entries.containsKey(subModeKey)) {
-            entries[subModeKey]
-        } else {
-            entries[layoutName]
-        } ?: return
-
-        val key = row.getOrNull(rowIndex)?.getOrNull(keyIndex)
-        val keyLabel = key?.let { buildKeyLabel(it) } ?: "?"
-
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.delete)
-            .setMessage(getString(R.string.text_keyboard_layout_delete_key_confirm_with_label, keyLabel))
-            .setPositiveButton(R.string.delete) { _, _ ->
-                if (rowIndex < row.size && keyIndex < row[rowIndex].size) {
-                    row[rowIndex].removeAt(keyIndex)
-                    buildRows()
-                    run { val name = currentLayout ?: return@run; previewManager.updatePreview(name, previewSubModeLabel, fcitxConnection) }
+            hasMultiSubmodeSupport = hasMultiSubmodeSupport,
+            onSave = { newKey ->
+                // 保存键数据
+                if (keyIndex != null) {
+                    row[rowIndex][keyIndex] = newKey
+                } else {
+                    row[rowIndex].add(newKey)
+                }
+                buildRows()
+                currentLayout?.let { name ->
+                    previewManager.updatePreview(name, previewSubModeLabel, fcitxConnection)
                     updateSaveButtonState()
                 }
+            },
+            onDelete = {
+                if (keyIndex != null) {
+                    row[rowIndex].removeAt(keyIndex)
+                    buildRows()
+                    currentLayout?.let { name ->
+                        previewManager.updatePreview(name, previewSubModeLabel, fcitxConnection)
+                        updateSaveButtonState()
+                    }
+                }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .create()
-        dialog.setOnShowListener { styleDialogTypography(dialog) }
-        dialog.show()
-    }
-
-    /**
-     * 构建键的显示标签（用于删除确认对话框）
-     */
-    private fun buildKeyLabel(key: Map<String, Any?>): String {
-        val type = key["type"] as? String ?: "?"
-        return when (type) {
-            "AlphabetKey" -> {
-                val main = key["main"] as? String ?: ""
-                main.ifEmpty { "?" }
-            }
-            "CapsKey" -> getString(R.string.text_keyboard_layout_key_label_caps)
-            "LayoutSwitchKey" -> {
-                val label = key["label"] as? String ?: "?123"
-                val subLabel = key["subLabel"] as? String ?: ""
-                if (subLabel.isNotEmpty()) "$label→$subLabel" else label
-            }
-            "CommaKey" -> ","
-            "LanguageKey" -> getString(R.string.text_keyboard_layout_key_label_lang)
-            "SpaceKey" -> getString(R.string.text_keyboard_layout_key_label_space)
-            "SymbolKey" -> key["label"] as? String ?: "."
-            "ReturnKey" -> getString(R.string.text_keyboard_layout_key_label_enter)
-            "BackspaceKey" -> "⌫"
-            else -> type
-        }
+        )
     }
 
     private fun confirmDeleteRow(rowIndex: Int) {

@@ -16,11 +16,12 @@ import splitties.dimensions.dp
 /**
  * A custom layout manager for Kawaii Bar that supports:
  * 1. Even distribution (SPACE_AROUND-like) when buttons have enough space
- * 2. Horizontal scrolling when buttons are compressed below minimum width (32dp)
+ * 2. Horizontal scrolling when buttons are compressed below minimum width (40dp)
  */
 class KawaiiBarLayout(context: Context) : FlexboxLayoutManager(context, RecyclerView.HORIZONTAL) {
 
-    val minButtonWidth: Int = context.dp(32)
+    // Minimum button width: 40dp to match icon size
+    val minButtonWidth: Int = context.dp(40)
     private val buttonSpacing: Int = context.dp(4) // 2dp margin on each side
 
     var isEvenDistributionMode = false
@@ -119,24 +120,27 @@ class KawaiiBarRecyclerView(context: Context) : RecyclerView(context) {
     internal fun updateLayoutMode() {
         val adapter = adapter ?: return
         val childCount = adapter.itemCount
-        val parentWidth = width
 
-        if (parentWidth <= 0 || childCount == 0) return
+        // Post to ensure layout measurement is complete
+        post {
+            val parentWidth = width
+            if (parentWidth <= 0 || childCount == 0) return@post
 
-        // Calculate ideal width for even distribution
-        val idealWidth = kawaiiBarLayout.calculateEvenDistributedWidth(childCount, parentWidth)
+            // Calculate ideal width for even distribution
+            val idealWidth = kawaiiBarLayout.calculateEvenDistributedWidth(childCount, parentWidth)
 
-        // If ideal width is less than minimum button width, use scroll mode
-        val shouldDistribute = idealWidth >= kawaiiBarLayout.minButtonWidth
+            // If ideal width is less than minimum button width, use scroll mode
+            val shouldDistribute = idealWidth >= kawaiiBarLayout.minButtonWidth
 
-        if (shouldDistribute) {
-            kawaiiBarLayout.setEvenDistributionMode()
-            // Disable horizontal scrolling when in even distribution mode
-            isHorizontalScrollBarEnabled = false
-        } else {
-            kawaiiBarLayout.setScrollMode()
-            // Enable horizontal scrolling when buttons need more space
-            isHorizontalScrollBarEnabled = true
+            if (shouldDistribute) {
+                kawaiiBarLayout.setEvenDistributionMode()
+                // Disable horizontal scrolling when in even distribution mode
+                isHorizontalScrollBarEnabled = false
+            } else {
+                kawaiiBarLayout.setScrollMode()
+                // Enable horizontal scrolling when buttons need more space
+                isHorizontalScrollBarEnabled = true
+            }
         }
     }
 

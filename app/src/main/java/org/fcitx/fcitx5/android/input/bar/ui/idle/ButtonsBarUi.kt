@@ -7,12 +7,10 @@ package org.fcitx.fcitx5.android.input.bar.ui.idle
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import androidx.annotation.DrawableRes
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.flexbox.AlignItems
-import com.google.android.flexbox.FlexWrap
 import com.google.android.flexbox.FlexboxLayoutManager
-import com.google.android.flexbox.JustifyContent
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.input.action.ButtonAction
@@ -36,26 +34,13 @@ class ButtonsBarUi(
     @DrawableRes
     private val floatingOnIcon = R.drawable.ic_baseline_keyboard_24
 
-    override val root = view(::RecyclerView) {
-        layoutManager = FlexboxLayoutManager(ctx, RecyclerView.HORIZONTAL).apply {
-            alignItems = AlignItems.CENTER
-            // Use FLEX_START to let buttons flow naturally and scroll when needed
-            justifyContent = JustifyContent.FLEX_START
-            // Disable wrapping to ensure single row horizontal scrolling
-            flexWrap = FlexWrap.NOWRAP
-        }
-        // Disable nested scrolling to prevent conflicts with parent touch handling
-        isNestedScrollingEnabled = false
-        // Ensure RecyclerView can scroll horizontally
-        overScrollMode = View.OVER_SCROLL_NEVER
+    override val root = view(::KawaiiBarRecyclerView) {
         // Set fixed height to match KawaiiBar height
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ctx.dp(KawaiiBarComponent.HEIGHT)
         )
     }
-
-    private val adapter = ButtonsBarAdapter()
 
     // Map to store button references by ID
     private val buttonMap = mutableMapOf<String, ToolButton>()
@@ -65,13 +50,16 @@ class ButtonsBarUi(
     private val longClickListeners = mutableMapOf<String, View.OnLongClickListener>()
 
     init {
-        (root as RecyclerView).adapter = adapter
         buildButtons()
     }
 
     private fun buildButtons() {
         buttonMap.clear()
-        adapter.notifyDataSetChanged()
+        val recyclerView = root as KawaiiBarRecyclerView
+        // Recreate adapter to ensure clean state
+        recyclerView.adapter = ButtonsBarAdapter()
+        // Update layout mode immediately (width should be available from previous layout)
+        recyclerView.updateLayoutMode()
     }
 
     fun updateConfig(newButtons: List<ConfigurableButton>) {
@@ -140,13 +128,12 @@ class ButtonsBarUi(
             val button = ToolButton(ctx, iconRes, theme).apply {
                 contentDescription = config.label ?: getDefaultLabel(config.id)
                 tag = config.id
+                // Ensure button always fills KawaiiBar height
+                minimumHeight = ctx.dp(KawaiiBarComponent.HEIGHT)
                 layoutParams = FlexboxLayoutManager.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 ).apply {
-                    // Set minimum width to prevent button from shrinking too small
-                    // Using 32dp as minimum to ensure icon is still clearly visible
-                    minWidth = ctx.dp(32)
                     // Add horizontal margin for spacing between buttons
                     marginStart = ctx.dp(2)
                     marginEnd = ctx.dp(2)
@@ -161,10 +148,63 @@ class ButtonsBarUi(
         }
 
         override fun onBindViewHolder(holder: ButtonViewHolder, position: Int) {
-            val config = buttons[position]
-            // Update button state if needed
+            val recyclerView = root as KawaiiBarRecyclerView
+            val kawaiiBarLayout = recyclerView.layoutManager as KawaiiBarLayout
+            val parentWidth = recyclerView.width
+            val childCount = itemCount
+            val button = holder.button
+
+            val params = holder.button.layoutParams as FlexboxLayoutManager.LayoutParams
+
+            // Calculate ideal width for even distribution
+            if (parentWidth > 0 && childCount > 0) {
+                val idealWidth = kawaiiBarLayout.calculateEvenDistributedWidth(childCount, parentWidth)
+
+                // Switch to scroll mode if ideal width is less than minimum
+                if (idealWidth < kawaiiBarLayout.minButtonWidth) {
+                    if (kawaiiBarLayout.isEvenDistributionMode) {
+                        kawaiiBarLayout.setScrollMode()
+                        recyclerView.isHorizontalScrollBarEnabled = true
+                        // Request relayout on next frame
+                        if (position == 0) {
+                            recyclerView.post {
+                                notifyDataSetChanged()
+                            }
+                            return
+                        }
+                    }
+                    // Scroll mode: WRAP_CONTENT with minimum width ensures buttons don't shrink
+                    params.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                    params.minWidth = kawaiiBarLayout.minButtonWidth
+                    button.image.scaleType = ImageView.ScaleType.CENTER_CROP
+                } else {
+                    // Switch to even distribution mode if not already
+                    if (!kawaiiBarLayout.isEvenDistributionMode) {
+                        kawaiiBarLayout.setEvenDistributionMode()
+                        recyclerView.isHorizontalScrollBarEnabled = false
+                        if (position == 0) {
+                            recyclerView.post {
+                                notifyDataSetChanged()
+                            }
+                            return
+                        }
+                    }
+                    // Even distribution mode: Set fixed width for each button
+                    params.width = idealWidth
+                    params.minWidth = 0
+                    // Use CENTER_INSIDE for even distribution mode
+                    button.image.scaleType = ImageView.ScaleType.CENTER_INSIDE
+                }
+            } else {
+                // Fallback to scroll mode
+                params.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                params.minWidth = kawaiiBarLayout.minButtonWidth
+            }
         }
 
-        override fun getItemViewType(position: Int): Int = position
+        override fun getItemViewType(position: Int): Int {
+            // Return position as view type since we recreate adapter on config changes
+            return position
+        }
     }
 }

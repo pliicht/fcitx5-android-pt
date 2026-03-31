@@ -13,6 +13,7 @@ import androidx.preference.PreferenceManager
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceProvider
 import org.fcitx.fcitx5.android.data.theme.ThemeManager.activeTheme
+import org.fcitx.fcitx5.android.ui.main.settings.theme.MonetThemePrefs
 import org.fcitx.fcitx5.android.utils.WeakHashSet
 import org.fcitx.fcitx5.android.utils.appContext
 import org.fcitx.fcitx5.android.utils.isDarkMode
@@ -37,7 +38,27 @@ object ThemeManager {
 
     val DefaultTheme = ThemePreset.PixelDark
 
-    private var monetThemes = listOf(ThemeMonet.getLight(), ThemeMonet.getDark())
+    private var monetThemes = loadMonetThemes()
+
+    private fun loadMonetThemes(): List<Theme.Monet> {
+        // 检查是否存在自定义映射配置
+        val lightMapping = MonetThemePrefs.getMapping("MonetLight")
+        val darkMapping = MonetThemePrefs.getMapping("MonetDark")
+        
+        val lightTheme = if (lightMapping != null) {
+            ThemeMonet.createFromMapping(isDark = false, mapping = lightMapping)
+        } else {
+            ThemeMonet.getLight()
+        }
+        
+        val darkTheme = if (darkMapping != null) {
+            ThemeMonet.createFromMapping(isDark = true, mapping = darkMapping)
+        } else {
+            ThemeMonet.getDark()
+        }
+        
+        return listOf(lightTheme, darkTheme)
+    }
 
     private val customThemes: MutableList<Theme.Custom> = ThemeFilesManager.listThemes()
 
@@ -51,6 +72,7 @@ object ThemeManager {
     fun refreshThemes() {
         customThemes.clear()
         customThemes.addAll(ThemeFilesManager.listThemes())
+        monetThemes = loadMonetThemes()
         activeTheme = evaluateActiveTheme()
     }
 
@@ -143,7 +165,8 @@ object ThemeManager {
 
     fun onSystemPlatteChange(newConfig: Configuration) {
         isDarkMode = newConfig.isDarkMode()
-        monetThemes = listOf(ThemeMonet.getLight(), ThemeMonet.getDark())
+        // 重新加载 Monet 主题（包括自定义映射）
+        monetThemes = loadMonetThemes()
         // `ManagedThemePreference` finds a theme with same name in `getAllThemes()`
         // thus `evaluateActiveTheme()` should be called after updating `monetThemes`
         activeTheme = evaluateActiveTheme()

@@ -15,7 +15,7 @@ data class ConfigurableButton(
     /**
      * Unique identifier for the button action.
      * Examples: "undo", "redo", "cursor_move", "floating_toggle", "clipboard", "more",
-     *           "theme", "input_method_options", "reload_config", "virtual_keyboard", "one_handed_keyboard"
+     *           "language_switch", "theme", "input_method_options", "reload_config", "virtual_keyboard", "one_handed_keyboard"
      */
     @SerialName("id")
     val id: String,

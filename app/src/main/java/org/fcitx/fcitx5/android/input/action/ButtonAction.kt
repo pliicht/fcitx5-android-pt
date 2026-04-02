@@ -15,11 +15,16 @@ import org.fcitx.fcitx5.android.core.SubtypeManager
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
 import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
+import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
 import org.fcitx.fcitx5.android.input.clipboard.ClipboardWindow
+import org.fcitx.fcitx5.android.input.dialog.AddMoreInputMethodsPrompt
 import org.fcitx.fcitx5.android.input.editing.TextEditingWindow
+import org.fcitx.fcitx5.android.input.keyboard.LangSwitchBehavior
 import org.fcitx.fcitx5.android.input.wm.InputWindowManager
 import org.fcitx.fcitx5.android.utils.AppUtil
+import org.fcitx.fcitx5.android.utils.InputMethodUtil
+import org.fcitx.fcitx5.android.utils.switchToNextIME
 
 /**
  * Represents a configurable button action that can be used in Kawaii Bar, Status Area, or keyboard.
@@ -101,6 +106,7 @@ sealed class ButtonAction {
             CursorMoveAction,
             FloatingToggleAction,
             ClipboardAction,
+            LanguageSwitchAction,
             ThemeAction,
             InputMethodOptionsAction,
             ReloadConfigAction,
@@ -125,6 +131,7 @@ sealed class ButtonAction {
          * Button actions available for Status Area.
          */
         val statusAreaActions = listOf(
+            LanguageSwitchAction,
             ThemeAction,
             InputMethodOptionsAction,
             ReloadConfigAction,
@@ -265,6 +272,52 @@ data object MoreAction : ButtonAction() {
 }
 
 // Status Area Actions
+
+data object LanguageSwitchAction : ButtonAction() {
+    override val id = "language_switch"
+    override val defaultIcon = R.drawable.ic_baseline_language_24
+    override val defaultLabelRes = R.string.language_switch
+
+    override fun execute(
+        context: Context,
+        service: FcitxInputMethodService,
+        fcitx: FcitxConnection,
+        windowManager: InputWindowManager,
+        view: View?,
+        onActionComplete: (() -> Unit)?
+    ) {
+        val behavior = AppPrefs.getInstance().keyboard.langSwitchKeyBehavior.getValue()
+        when (behavior) {
+            LangSwitchBehavior.Enumerate -> {
+                fcitx.launchOnReady { f ->
+                    if (f.enabledIme().size < 2) {
+                        service.lifecycleScope.launch {
+                            service.showDialog(AddMoreInputMethodsPrompt.build(context))
+                        }
+                    } else {
+                        f.enumerateIme()
+                    }
+                }
+            }
+            LangSwitchBehavior.ToggleActivate -> {
+                fcitx.launchOnReady { it.toggleIme() }
+            }
+            LangSwitchBehavior.NextInputMethodApp -> {
+                service.switchToNextIME()
+            }
+        }
+    }
+
+    override fun onLongPress(
+        context: Context,
+        service: FcitxInputMethodService,
+        fcitx: FcitxConnection,
+        windowManager: InputWindowManager,
+        view: View
+    ) {
+        InputMethodUtil.showPicker()
+    }
+}
 
 data object ThemeAction : ButtonAction() {
     override val id = "theme"

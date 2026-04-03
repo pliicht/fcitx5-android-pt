@@ -532,6 +532,10 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     private fun handleBackspaceKey() {
+        handleBackspaceDirectly()
+    }
+
+    fun handleBackspaceDirectly() {
         val lastSelection = selection.latest
         if (lastSelection.isNotEmpty()) {
             selection.predict(lastSelection.start)

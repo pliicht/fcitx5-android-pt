@@ -133,18 +133,19 @@ abstract class KeyView(
         }
         // key border
         if ((bordered && def.border != Border.Off) || def.border == Border.On) {
-            val bkgColor = when (def.variant) {
+            val defaultBkgColor = when (def.variant) {
                 Variant.Normal, Variant.AltForeground -> theme.keyBackgroundColor
                 Variant.Alternative -> theme.altKeyBackgroundColor
                 Variant.Accent -> theme.accentKeyBackgroundColor
             }
+            val bkgColor = resolveBackgroundColor(theme, defaultBkgColor)
             val borderOrShadowWidth = dp(1)
             // background: key border
             appearanceView.background = if (borderStroke) borderedKeyBackgroundDrawable(
-                bkgColor, theme.keyShadowColor,
+                bkgColor, resolveShadowColor(theme),
                 radius, borderOrShadowWidth, hMargin, vMargin
             ) else shadowedKeyBackgroundDrawable(
-                bkgColor, theme.keyShadowColor,
+                bkgColor, resolveShadowColor(theme),
                 radius, borderOrShadowWidth, hMargin, vMargin
             )
             // foreground: press highlight or ripple
@@ -159,6 +160,33 @@ abstract class KeyView(
         add(appearanceView, lParams(matchParent, matchParent))
     }
 
+    private fun resolveMonetColor(resourceName: String?): Int? {
+        val name = resourceName?.takeIf { it.isNotBlank() } ?: return null
+        val colorResId = context.resources.getIdentifier(name, "color", "android")
+        if (colorResId == 0) return null
+        return runCatching { context.getColor(colorResId) }.getOrNull()
+    }
+
+    private fun resolveColorOverride(staticColor: Int?, monetResourceName: String?): Int? {
+        return resolveMonetColor(monetResourceName) ?: staticColor
+    }
+
+    protected fun resolveBackgroundColor(theme: Theme, defaultColor: Int): Int {
+        return resolveColorOverride(def.backgroundColor, def.backgroundColorMonet) ?: defaultColor
+    }
+
+    protected fun resolveShadowColor(theme: Theme): Int {
+        return resolveColorOverride(def.shadowColor, def.shadowColorMonet) ?: theme.keyShadowColor
+    }
+
+    protected fun resolveTextColor(defaultColor: Int): Int {
+        return resolveColorOverride(def.textColor, def.textColorMonet) ?: defaultColor
+    }
+
+    protected fun resolveAltTextColor(defaultColor: Int): Int {
+        return resolveColorOverride(def.altTextColor, def.altTextColorMonet) ?: defaultColor
+    }
+
     private fun setupPressHighlight(mask: Drawable? = null) {
         appearanceView.foreground = if (rippled) {
             RippleDrawable(
@@ -171,7 +199,7 @@ abstract class KeyView(
                 addState(
                     intArrayOf(android.R.attr.state_pressed),
                     borderedKeyBackgroundDrawable(
-                        Color.TRANSPARENT, theme.keyShadowColor,
+                        Color.TRANSPARENT, resolveShadowColor(theme),
                         radius, dp(2), hMargin, vMargin
                     )
                 )
@@ -241,7 +269,7 @@ abstract class KeyView(
                 val hInset = dp(10)
                 val vInset = if (h < minHeight) 0 else min((h - minHeight) / 2, dp(16))
                 appearanceView.background = insetRadiusDrawable(
-                    hInset, vInset, bkgRadius, theme.spaceBarColor
+                    hInset, vInset, bkgRadius, resolveBackgroundColor(theme, theme.spaceBarColor)
                 )
                 // InsetDrawable sets padding to container view; remove padding to prevent text from bing clipped
                 appearanceView.padding = 0
@@ -258,7 +286,7 @@ abstract class KeyView(
                 val hInset = (w - drawableSize) / 2
                 val vInset = (h - drawableSize) / 2
                 appearanceView.background = insetOvalDrawable(
-                    hInset, vInset, theme.accentKeyBackgroundColor
+                    hInset, vInset, resolveBackgroundColor(theme, theme.accentKeyBackgroundColor)
                 )
                 appearanceView.padding = 0
                 setupPressHighlight(
@@ -278,17 +306,18 @@ abstract class KeyView(
 
         // Update key background (only when bordered)
         if ((bordered && def.border != Border.Off) || def.border == Border.On) {
-            val bkgColor = when (def.variant) {
+            val defaultBkgColor = when (def.variant) {
                 Variant.Normal, Variant.AltForeground -> newTheme.keyBackgroundColor
                 Variant.Alternative -> newTheme.altKeyBackgroundColor
                 Variant.Accent -> newTheme.accentKeyBackgroundColor
             }
+            val bkgColor = resolveBackgroundColor(newTheme, defaultBkgColor)
             val borderOrShadowWidth = dp(1)
             appearanceView.background = if (borderStroke) borderedKeyBackgroundDrawable(
-                bkgColor, newTheme.keyShadowColor,
+                bkgColor, resolveShadowColor(newTheme),
                 radius, borderOrShadowWidth, hMargin, vMargin
             ) else shadowedKeyBackgroundDrawable(
-                bkgColor, newTheme.keyShadowColor,
+                bkgColor, resolveShadowColor(newTheme),
                 radius, borderOrShadowWidth, hMargin, vMargin
             )
         }
@@ -333,11 +362,13 @@ open class TextKeyView(
         fontKey = "key_main_font"
         setTypeface(typeface, def.textStyle)
         setTextColor(
-            when (def.variant) {
-                Variant.Normal -> theme.keyTextColor
-                Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
-                Variant.Accent -> theme.accentKeyTextColor
-            }
+            resolveTextColor(
+                when (def.variant) {
+                    Variant.Normal -> theme.keyTextColor
+                    Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
+                    Variant.Accent -> theme.accentKeyTextColor
+                }
+            )
         )
     }
 
@@ -368,11 +399,13 @@ open class TextKeyView(
     override fun updateTheme(newTheme: Theme) {
         super.updateTheme(newTheme)
         mainText.setTextColor(
-            when (def.variant) {
-                Variant.Normal -> newTheme.keyTextColor
-                Variant.AltForeground, Variant.Alternative -> newTheme.altKeyTextColor
-                Variant.Accent -> newTheme.accentKeyTextColor
-            }
+            resolveTextColor(
+                when (def.variant) {
+                    Variant.Normal -> newTheme.keyTextColor
+                    Variant.AltForeground, Variant.Alternative -> newTheme.altKeyTextColor
+                    Variant.Accent -> newTheme.accentKeyTextColor
+                }
+            )
         )
     }
 }
@@ -409,10 +442,12 @@ class AltTextKeyView(
         text = def.altText
         textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
         setTextColor(
-            when (def.variant) {
-                Variant.Normal, Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
-                Variant.Accent -> theme.accentKeyTextColor
-            }
+            resolveAltTextColor(
+                when (def.variant) {
+                    Variant.Normal, Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
+                    Variant.Accent -> theme.accentKeyTextColor
+                }
+            )
         )
     }
 
@@ -546,10 +581,12 @@ class AltTextKeyView(
     override fun updateTheme(newTheme: Theme) {
         super.updateTheme(newTheme)
         altText.setTextColor(
-            when (def.variant) {
-                Variant.Normal, Variant.AltForeground, Variant.Alternative -> newTheme.altKeyTextColor
-                Variant.Accent -> newTheme.accentKeyTextColor
-            }
+            resolveAltTextColor(
+                when (def.variant) {
+                    Variant.Normal, Variant.AltForeground, Variant.Alternative -> newTheme.altKeyTextColor
+                    Variant.Accent -> newTheme.accentKeyTextColor
+                }
+            )
         )
     }
 }
@@ -562,7 +599,17 @@ class ImageKeyView(
     horizontalGapScale: Float = 1f
 ) :
     KeyView(ctx, theme, def, horizontalGapScale) {
-    val img = imageView { configure(theme, def.src, def.variant) }
+    val img = imageView { configure(theme, def.src, def.variant) }.apply {
+        imageTintList = ColorStateList.valueOf(
+            resolveTextColor(
+                when (def.variant) {
+                    Variant.Normal -> theme.keyTextColor
+                    Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
+                    Variant.Accent -> theme.accentKeyTextColor
+                }
+            )
+        )
+    }
 
     init {
         appearanceView.apply {
@@ -575,11 +622,13 @@ class ImageKeyView(
     override fun updateTheme(newTheme: Theme) {
         super.updateTheme(newTheme)
         img.imageTintList = ColorStateList.valueOf(
-            when (def.variant) {
-                Variant.Normal -> newTheme.keyTextColor
-                Variant.AltForeground, Variant.Alternative -> newTheme.altKeyTextColor
-                Variant.Accent -> newTheme.accentKeyTextColor
-            }
+            resolveTextColor(
+                when (def.variant) {
+                    Variant.Normal -> newTheme.keyTextColor
+                    Variant.AltForeground, Variant.Alternative -> newTheme.altKeyTextColor
+                    Variant.Accent -> newTheme.accentKeyTextColor
+                }
+            )
         )
     }
 }
@@ -607,6 +656,15 @@ class ImageTextKeyView(
     TextKeyView(ctx, theme, def, horizontalGapScale) {
     val img = imageView {
         configure(theme, def.src, def.variant)
+        imageTintList = ColorStateList.valueOf(
+            resolveTextColor(
+                when (def.variant) {
+                    Variant.Normal -> theme.keyTextColor
+                    Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
+                    Variant.Accent -> theme.accentKeyTextColor
+                }
+            )
+        )
     }
 
     init {
@@ -654,11 +712,13 @@ class ImageTextKeyView(
     override fun updateTheme(newTheme: Theme) {
         super.updateTheme(newTheme)
         img.imageTintList = ColorStateList.valueOf(
-            when (def.variant) {
-                Variant.Normal -> newTheme.keyTextColor
-                Variant.AltForeground, Variant.Alternative -> newTheme.altKeyTextColor
-                Variant.Accent -> newTheme.accentKeyTextColor
-            }
+            resolveTextColor(
+                when (def.variant) {
+                    Variant.Normal -> newTheme.keyTextColor
+                    Variant.AltForeground, Variant.Alternative -> newTheme.altKeyTextColor
+                    Variant.Accent -> newTheme.accentKeyTextColor
+                }
+            )
         )
     }
 }

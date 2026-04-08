@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  * SPDX-FileCopyrightText: Copyright 2026 Fcitx5 for Android Contributors
  */
+@file:Suppress("DEPRECATION")
+
 package org.fcitx.fcitx5.android.utils
 
 import android.app.ActivityManager
@@ -11,7 +13,8 @@ import androidx.collection.LruCache
 import timber.log.Timber
 import org.fcitx.fcitx5.android.utils.appContext
 
-// RenderScript imports - use at runtime for API <= 30 when available
+// RenderScript imports - used at runtime for API <= 30 for hardware-accelerated blur
+// These classes are deprecated but still functional and provide better performance on older devices
 import android.renderscript.Allocation
 import android.renderscript.Element
 import android.renderscript.RenderScript

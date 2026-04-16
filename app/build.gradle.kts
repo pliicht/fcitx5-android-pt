@@ -23,6 +23,15 @@ val imeSettingsActivity = "$packageBase.ui.main.MainActivity"
 android {
     namespace = packageBase
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("F:/000_Cause/000_Coding/998_AppKey/pliichtKey")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+            keyAlias = System.getenv("KEY_ALIAS") ?: "pliichtKey"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+        }
+    }
+
     defaultConfig {
         applicationId = appIdBase
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -68,6 +77,7 @@ android {
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             resValue("mipmap", "app_icon", "@mipmap/ic_launcher")
             resValue("mipmap", "app_icon_round", "@mipmap/ic_launcher_round")
             resValue("string", "app_name", "@string/app_name_release")

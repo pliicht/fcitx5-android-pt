@@ -100,7 +100,6 @@ abstract class BaseKeyboard(
 
     private val selectionSwipeThreshold = dp(10f)
     private val inputSwipeThreshold = dp(36f)
-
     // a rather large threshold effectively disables swipe of the direction
     private val disabledSwipeThreshold = dp(800f)
 
@@ -584,64 +583,71 @@ abstract class BaseKeyboard(
             }
             if (def is SpaceKey) {
                 spaceKeys.add(this)
-                swipeEnabled = spaceSwipeMoveCursor.getValue()
+                val hasCustomSwipeUp = def.behaviors.any {
+                    it is KeyDef.Behavior.SwipeDir && it.direction == KeyDef.Behavior.SwipeDirection.Up && it.action !is KeyAction.SpaceSwipeUpAction
+                }
+                val hasCustomSwipeDown = def.behaviors.any {
+                    it is KeyDef.Behavior.SwipeDir && it.direction == KeyDef.Behavior.SwipeDirection.Down && it.action !is KeyAction.SpaceSwipeDownAction
+                }
+                val hasCustomSwipeLeft = def.behaviors.any {
+                    it is KeyDef.Behavior.SwipeDir && it.direction == KeyDef.Behavior.SwipeDirection.Left && it.action !is KeyAction.SpaceSwipeUpAction
+                }
+                val hasCustomSwipeRight = def.behaviors.any {
+                    it is KeyDef.Behavior.SwipeDir && it.direction == KeyDef.Behavior.SwipeDirection.Right && it.action !is KeyAction.SpaceSwipeUpAction
+                }
+                val hasAnyCustomSwipe = hasCustomSwipeUp || hasCustomSwipeDown || hasCustomSwipeLeft || hasCustomSwipeRight
+                swipeEnabled = hasAnyCustomSwipe || spaceSwipeMoveCursor.getValue()
                 swipeRepeatEnabled = true
                 swipeThresholdX = selectionSwipeThreshold
-                // Use a larger threshold for Y axis to avoid accidental up/down triggers
-                // when user intends to swipe left/right
                 swipeThresholdY = selectionSwipeThreshold * 1.5f
-                // Track the locked swipe direction to avoid conflicting gestures
                 var swipeDirectionLocked: SwipeAxis? = null
                 onGestureListener = OnGestureListener { view, event ->
                     when (event.type) {
                         GestureType.Move -> {
                             val countX = event.countX
                             val countY = event.countY
-
-                            // Lock direction on first swipe
                             if (swipeDirectionLocked == null && (countX != 0 || countY != 0)) {
-                                swipeDirectionLocked = if (kotlin.math.abs(countX) >= kotlin.math.abs(countY)) {
-                                    SwipeAxis.X
-                                } else {
-                                    SwipeAxis.Y
-                                }
+                                val absX = kotlin.math.abs(countX)
+                                val absY = kotlin.math.abs(countY)
+                                swipeDirectionLocked = if (absX >= absY) SwipeAxis.X else SwipeAxis.Y
                             }
-
                             val handled = when (swipeDirectionLocked) {
                                 SwipeAxis.X -> {
                                     if (countX != 0) {
-                                        val sym =
-                                            if (countX > 0) FcitxKeyMapping.FcitxKey_Right else FcitxKeyMapping.FcitxKey_Left
-                                        val action = KeyAction.SymAction(KeySym(sym), KeyStates.Virtual)
-                                        repeat(countX.absoluteValue) {
-                                            onAction(action)
-                                            if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
+                                        val swipeRight = countX > 0
+                                        val hasCustomForDirection = if (swipeRight) hasCustomSwipeRight else hasCustomSwipeLeft
+                                        if (hasCustomForDirection) {
+                                            false
+                                        } else {
+                                            val sym = if (swipeRight) FcitxKeyMapping.FcitxKey_Right else FcitxKeyMapping.FcitxKey_Left
+                                            val action = KeyAction.SymAction(KeySym(sym), KeyStates.Virtual)
+                                            repeat(countX.absoluteValue) {
+                                                onAction(action)
+                                                if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
+                                            }
+                                            true
                                         }
-                                        true
-                                    } else {
-                                        false
-                                    }
+                                    } else false
                                 }
                                 SwipeAxis.Y -> {
                                     if (countY != 0) {
-                                        val sym =
-                                            if (countY > 0) FcitxKeyMapping.FcitxKey_Down else FcitxKeyMapping.FcitxKey_Up
-                                        val action = KeyAction.SymAction(KeySym(sym), KeyStates.Virtual)
-                                        repeat(countY.absoluteValue) {
-                                            onAction(action)
-                                            if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
+                                        val swipeDown = countY > 0
+                                        val hasCustomForDirection = if (swipeDown) hasCustomSwipeDown else hasCustomSwipeUp
+                                        if (hasCustomForDirection) {
+                                            false
+                                        } else if (swipeDown) {
+                                            onAction(KeyAction.SpaceSwipeDownAction)
+                                            true
+                                        } else {
+                                            false
                                         }
-                                        true
-                                    } else {
-                                        false
-                                    }
+                                    } else false
                                 }
                                 null -> false
                             }
                             handled
                         }
                         GestureType.Up -> {
-                            // Reset direction lock on finger up
                             swipeDirectionLocked = null
                             false
                         }
@@ -652,19 +658,39 @@ abstract class BaseKeyboard(
                 swipeEnabled = true
                 swipeRepeatEnabled = true
                 swipeThresholdX = selectionSwipeThreshold
-                swipeThresholdY = disabledSwipeThreshold
+                swipeThresholdY = inputSwipeThreshold
+                var bsSwipeDirectionLocked: SwipeAxis? = null
                 onGestureListener = OnGestureListener { view, event ->
                     when (event.type) {
                         GestureType.Move -> {
-                            val count = event.countX
-                            if (count != 0) {
-                                onAction(KeyAction.MoveSelectionAction(count))
-                                if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
-                                true
-                            } else false
+                            val countX = event.countX
+                            val countY = event.countY
+                            // Lock direction on first meaningful swipe
+                            if (bsSwipeDirectionLocked == null && (countX != 0 || countY != 0)) {
+                                bsSwipeDirectionLocked = if (kotlin.math.abs(countX) >= kotlin.math.abs(countY)) {
+                                    SwipeAxis.X
+                                } else {
+                                    SwipeAxis.Y
+                                }
+                            }
+                            when (bsSwipeDirectionLocked) {
+                                SwipeAxis.X -> {
+                                    if (countX != 0) {
+                                        onAction(KeyAction.MoveSelectionAction(countX))
+                                        if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
+                                        true
+                                    } else false
+                                }
+                                else -> false
+                            }
                         }
                         GestureType.Up -> {
-                            onAction(KeyAction.DeleteSelectionAction(event.totalX))
+                            val wasX = bsSwipeDirectionLocked == SwipeAxis.X
+                            bsSwipeDirectionLocked = null
+                            if (wasX) {
+                                onAction(KeyAction.DeleteSelectionAction(event.totalX))
+                            }
+                            // Vertical swipe-up for delete-all is handled by SwipeDir behavior
                             false
                         }
                         else -> false
@@ -703,6 +729,34 @@ abstract class BaseKeyboard(
                             when (event.type) {
                                 GestureType.Up -> {
                                     if (!event.consumed && swipeSymbolDirection.checkY(event.totalY)) {
+                                        onAction(it.action)
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                else -> false
+                            } || oldOnGestureListener.onGesture(view, event)
+                        }
+                    }
+                    is KeyDef.Behavior.SwipeDir -> {
+                        swipeEnabled = true
+                        if (it.direction == KeyDef.Behavior.SwipeDirection.Left || it.direction == KeyDef.Behavior.SwipeDirection.Right) {
+                            if (swipeThresholdX > inputSwipeThreshold) swipeThresholdX = inputSwipeThreshold
+                        } else {
+                            if (swipeThresholdY > inputSwipeThreshold) swipeThresholdY = inputSwipeThreshold
+                        }
+                        val oldOnGestureListener = onGestureListener ?: OnGestureListener.Empty
+                        onGestureListener = OnGestureListener { view, event ->
+                            when (event.type) {
+                                GestureType.Up -> {
+                                    val matched = when (it.direction) {
+                                        KeyDef.Behavior.SwipeDirection.Up -> event.totalY < 0
+                                        KeyDef.Behavior.SwipeDirection.Down -> event.totalY > 0
+                                        KeyDef.Behavior.SwipeDirection.Left -> event.totalX < 0
+                                        KeyDef.Behavior.SwipeDirection.Right -> event.totalX > 0
+                                    }
+                                    if (!event.consumed && matched) {
                                         onAction(it.action)
                                         true
                                     } else {
@@ -775,6 +829,31 @@ abstract class BaseKeyboard(
                             } || oldOnGestureListener.onGesture(view, event)
                         }
                     }
+                    is KeyDef.Popup.CustomKeyboard -> {
+                        // Keep long-press behavior unless LongPressKeyboard explicitly takes over.
+                        if (!hasLongPressKeyboard && !hasLongPressBehavior) {
+                            setOnLongClickListener { view ->
+                                view as KeyView
+                                onPopupAction(PopupAction.ShowCustomKeyboardAction(view.id, it, view.bounds))
+                                // do not consume this LongClick gesture
+                                false
+                            }
+                            val oldOnGestureListener = onGestureListener ?: OnGestureListener.Empty
+                            swipeEnabled = true
+                            onGestureListener = OnGestureListener { view, event ->
+                                view as KeyView
+                                when (event.type) {
+                                    GestureType.Move -> {
+                                        onPopupChangeFocus(view.id, event.x, event.y)
+                                    }
+                                    GestureType.Up -> {
+                                        onPopupTrigger(view.id)
+                                    }
+                                    else -> false
+                                } || oldOnGestureListener.onGesture(view, event)
+                            }
+                        }
+                    }
                     is KeyDef.Popup.Keyboard -> {
                         // Keep long-press behavior unless LongPressKeyboard explicitly takes over.
                         // LongPressKeyboard already contains baseLabel to lookup candidates.
@@ -819,6 +898,83 @@ abstract class BaseKeyboard(
                                     }
                                     GestureType.Up -> {
                                         onPopupAction(PopupAction.DismissAction(view.id))
+                                    }
+                                }
+                            }
+                            // never consume gesture in preview popup
+                            oldOnGestureListener.onGesture(view, event)
+                        }
+                    }
+                    is KeyDef.Popup.CustomAltPreview -> {
+                        // CustomAltPreview respects the global popupOnKeyPress toggle for
+                        // the default character preview on tap. When popupOnKeyPress is off,
+                        // only direction-specific swipe popups are shown.
+                        // When swiping to a direction with popup text, commit that text on release.
+                        val oldOnGestureListener = onGestureListener ?: OnGestureListener.Empty
+                        var currentDirectionPopupText: String? = null
+                        var previewShown = false
+                        onGestureListener = OnGestureListener { view, event ->
+                            view as KeyView
+                            when (event.type) {
+                                GestureType.Down -> {
+                                    currentDirectionPopupText = null
+                                    previewShown = false
+                                    if (popupOnKeyPress) {
+                                        // Show default preview (the character) only when popupOnKeyPress is on
+                                        onPopupAction(
+                                            PopupAction.PreviewAction(view.id, it.content, view.bounds)
+                                        )
+                                        previewShown = true
+                                    }
+                                }
+                                GestureType.Move -> {
+                                    // Determine direction and show appropriate popup text
+                                    // event.totalX/Y are swipe threshold counts (1 count ≈ 24px),
+                                    // NOT pixel values. Use non-zero check for direction detection.
+                                    val dx = event.totalX
+                                    val dy = event.totalY
+                                    val absDx = dx.absoluteValue
+                                    val absDy = dy.absoluteValue
+                                    val directionText = when {
+                                        absDy > absDx && dy < 0 && it.swipeUpEnabled && it.swipeUpPopup != null -> it.swipeUpPopup
+                                        absDy > absDx && dy > 0 && it.swipeDownEnabled && it.swipeDownPopup != null -> it.swipeDownPopup
+                                        absDx > absDy && dx < 0 && it.swipeLeftEnabled && it.swipeLeftPopup != null -> it.swipeLeftPopup
+                                        absDx > absDy && dx > 0 && it.swipeRightEnabled && it.swipeRightPopup != null -> it.swipeRightPopup
+                                        else -> null
+                                    }
+                                    currentDirectionPopupText = directionText
+                                    if (directionText != null) {
+                                        // Direction-specific popup text found — show it regardless of popupOnKeyPress
+                                        val action = if (previewShown) {
+                                            PopupAction.PreviewUpdateAction(view.id, directionText)
+                                        } else {
+                                            previewShown = true
+                                            PopupAction.PreviewAction(view.id, directionText, view.bounds)
+                                        }
+                                        onPopupAction(action)
+                                    } else if (popupOnKeyPress) {
+                                        // No direction matched and popupOnKeyPress is on — show default character
+                                        val action = if (previewShown) {
+                                            PopupAction.PreviewUpdateAction(view.id, it.content)
+                                        } else {
+                                            previewShown = true
+                                            PopupAction.PreviewAction(view.id, it.content, view.bounds)
+                                        }
+                                        onPopupAction(action)
+                                    } else if (previewShown) {
+                                        // popupOnKeyPress is off and direction lost — dismiss
+                                        onPopupAction(PopupAction.DismissAction(view.id))
+                                        previewShown = false
+                                    }
+                                }
+                                GestureType.Up -> {
+                                    if (previewShown) {
+                                        onPopupAction(PopupAction.DismissAction(view.id))
+                                    }
+                                    // If a direction-specific popup text was shown, commit it as input
+                                    currentDirectionPopupText?.let { popupText ->
+                                        onAction(KeyAction.CommitAction(popupText))
+                                        currentDirectionPopupText = null
                                     }
                                 }
                             }

@@ -1,4 +1,6 @@
-if(DEFINED ENV{ECM_DIR})
+if(DEFINED ECM_DIR)
+    # Already provided by CMake arguments
+elseif(DEFINED ENV{ECM_DIR})
     set(ECM_DIR $ENV{ECM_DIR})
 elseif(CMAKE_HOST_WIN32)
     set(ECM_DIR "C:/msys64/ucrt64/share/ECM/cmake")

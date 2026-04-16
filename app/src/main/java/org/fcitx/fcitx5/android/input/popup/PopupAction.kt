@@ -33,6 +33,12 @@ sealed class PopupAction {
         val bounds: Rect
     ) : PopupAction()
 
+    data class ShowCustomKeyboardAction(
+        override val viewId: Int,
+        val keyboard: KeyDef.Popup.CustomKeyboard,
+        val bounds: Rect
+    ) : PopupAction()
+
     data class ShowMenuAction(
         override val viewId: Int,
         val menu: KeyDef.Popup.Menu,

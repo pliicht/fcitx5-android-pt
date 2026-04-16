@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name_release">小企鵝輸入法.fx</string>
-    <string name="app_name_debug">小企鵝輸入法.fx (除錯)</string>
+    <string name="app_name_release">小企鵝輸入法.pt</string>
+    <string name="app_name_debug">小企鵝輸入法.pt (除錯)</string>
     <string name="app_name_mainline_release">小企鵝輸入法</string>
     <string name="app_name_mainline_debug">小企鵝輸入法 (除錯)</string>
     <string name="save">儲存</string>
@@ -630,4 +630,59 @@
     <string name="text_keyboard_layout_submode_added">已新增子模式佈局：%1$s</string>
     <string name="text_keyboard_layout_no_submode_selected">尚未選擇子模式</string>
     <string name="text_keyboard_layout_save_failed">儲存佈局失敗。請查看 logcat 取得詳細資訊。</string>
+    <string name="app_language">語言</string>
+    <string name="language_system_default">系統預設</string>
+    <string name="language_english">English</string>
+    <string name="language_chinese_simplified">简体中文</string>
+    <string name="language_chinese_traditional">繁體中文</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_korean">한국어</string>
+    <string name="language_german">Deutsch</string>
+    <string name="language_russian">Русский</string>
+    <string name="language_spanish">Español</string>
+
+    <!-- Virtual Keyboard category titles -->
+    <string name="category_appearance">外觀</string>
+    <string name="category_layout">佈局</string>
+    <string name="category_keys">按鍵</string>
+    <string name="category_gestures">手勢</string>
+    <string name="category_splits">分詞</string>
+    <string name="category_keyboard_display">鍵盤顯示</string>
+    <string name="category_feedback">回饋</string>
+    <string name="category_advanced">進階</string>
+    <string name="category_toolbar">工具列</string>
+
+    <!-- Key Editor: swipe/long press section labels -->
+    <string name="key_editor_swipe_longpress_label">滑動/長按功能設定</string>
+    <string name="key_editor_popup_preview_label">Popup提示設定</string>
+    <string name="key_editor_swipe_up_hint">上滑提示</string>
+    <string name="key_editor_swipe_down_hint">下滑提示</string>
+    <string name="key_editor_swipe_left_hint">左滑提示</string>
+    <string name="key_editor_swipe_right_hint">右滑提示</string>
+    <string name="key_editor_longpress_hint">長按提示</string>
+    <string name="key_editor_swipe_up_btn">上滑 (↑)</string>
+    <string name="key_editor_swipe_down_btn">下滑 (↓)</string>
+    <string name="key_editor_swipe_left_btn">左滑 (←)</string>
+    <string name="key_editor_swipe_right_btn">右滑 (→)</string>
+    <string name="key_editor_longpress_btn">長按</string>
+    <string name="key_editor_swipe_up_event">上滑事件</string>
+    <string name="key_editor_swipe_down_event">下滑事件</string>
+    <string name="key_editor_swipe_left_event">左滑事件</string>
+    <string name="key_editor_swipe_right_event">右滑事件</string>
+    <string name="key_editor_longpress_event">長按事件</string>
+    <string name="key_editor_custom_behavior_label">自訂功能按鍵行為</string>
+
+    <!-- Key type display names -->
+    <string name="key_type_alphabet">字母鍵</string>
+    <string name="key_type_caps">大小寫鍵</string>
+    <string name="key_type_layout_switch">佈局切換鍵</string>
+    <string name="key_type_comma">逗號鍵</string>
+    <string name="key_type_language">語言鍵</string>
+    <string name="key_type_space">空格鍵</string>
+    <string name="key_type_symbol">符號鍵</string>
+    <string name="key_type_return">返回鍵</string>
+    <string name="key_type_backspace">退格鍵</string>
+    <string name="key_type_macro">巨集鍵</string>
+    <string name="key_editor_popup_hint">只有設定了滑動功能或長按功能後才會啟用提示</string>
+    <string name="app_language_restart_warning">更換語言後將重新啟動應用以套用變更</string>
 </resources>

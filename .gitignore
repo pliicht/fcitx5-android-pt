@@ -102,3 +102,7 @@ lint/tmp/
 
 ### Kotlin ###
 .kotlin/
+
+### Local tools ###
+.local_tools/
+.vscode/

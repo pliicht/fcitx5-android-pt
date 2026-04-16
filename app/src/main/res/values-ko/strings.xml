@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name_release">Fcitx5.fx</string>
-    <string name="app_name_debug">Fcitx5.fx (디버그)</string>
+    <string name="app_name_release">Fcitx5.pt</string>
+    <string name="app_name_debug">Fcitx5.pt (디버그)</string>
     <string name="app_name_mainline_release">Fcitx5</string>
     <string name="app_name_mainline_debug">Fcitx5 (디버그)</string>
     <string name="save">저장</string>
@@ -630,4 +630,14 @@
     <string name="user_data_imported">已导入来自 %1$s 的用户数据，正在重启…</string>
     <string name="vivo_keypress_workaround">解决 vivo Origin OS 按键检测问题</string>
     <string name="whether_reset_switch_preference">是否要将此设置重置为默认值？</string>
-    </resources>
+        <string name="app_language">Language</string>
+    <string name="language_system_default">System default</string>
+    <string name="language_english">English</string>
+    <string name="language_chinese_simplified">简体中文</string>
+    <string name="language_chinese_traditional">繁體中文</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_korean">한국어</string>
+    <string name="language_german">Deutsch</string>
+    <string name="language_russian">Русский</string>
+    <string name="language_spanish">Español</string>
+</resources>

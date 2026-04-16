@@ -160,6 +160,25 @@ class PopupComponent :
         reallyShowKeyboard(viewId, keys, bounds)
     }
 
+    private fun showCustomKeyboard(viewId: Int, keyboard: KeyDef.Popup.CustomKeyboard, bounds: Rect) {
+        // Get base candidates from PopupPreset using label
+        val baseKeys = popupPresetJson?.get(keyboard.label)
+            ?: PopupPreset[keyboard.label]
+            ?: EmojiModifier.produceSkinTones(keyboard.label)
+            ?: emptyArray()
+
+        // Prepend extra custom keys before preset candidates
+        val keys = keyboard.extraKeys + baseKeys
+
+        if (keys.isEmpty()) {
+            dismissPopup(viewId)
+            return
+        }
+        // clear popup preview text OR create empty popup preview
+        showingEntryUi[viewId]?.setText("") ?: showPopup(viewId, "", bounds)
+        reallyShowKeyboard(viewId, keys, bounds)
+    }
+
     private fun reallyShowKeyboard(viewId: Int, keys: Array<String>, bounds: Rect) {
         val labels = if (punctuation.enabled) {
             Array(keys.size) { punctuation.transform(keys[it]) }
@@ -321,6 +340,7 @@ class PopupComponent :
                 is PopupAction.PreviewAction -> showPopup(viewId, content, bounds)
                 is PopupAction.PreviewUpdateAction -> updatePopup(viewId, content)
                 is PopupAction.ShowKeyboardAction -> showKeyboard(viewId, keyboard, bounds)
+                is PopupAction.ShowCustomKeyboardAction -> showCustomKeyboard(viewId, keyboard, bounds)
                 is PopupAction.ShowLongPressKeyboardAction -> showLongPressKeyboard(viewId, keyboard, bounds)
                 is PopupAction.ShowMenuAction -> showMenu(viewId, menu, bounds)
                 is PopupAction.TriggerAction -> outAction = triggerFocused(viewId)

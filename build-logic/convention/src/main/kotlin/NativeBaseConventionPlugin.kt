@@ -27,7 +27,9 @@ open class NativeBaseConventionPlugin : Plugin<Project> {
                         arguments(
                             "-DANDROID_STL=c++_shared",
                             "-DVERSION_NAME=${Versions.baseVersionName}",
-                            "-DPREBUILT_DIR=${prebuiltDir.absolutePath}"
+                            "-DPREBUILT_DIR=${prebuiltDir.absolutePath.replace('\\', '/')}",
+                            "-DECM_DIR=${target.rootProject.projectDir.absolutePath.replace('\\', '/')}/.local_tools/ecm-install/share/ECM/cmake",
+                            "-DCMAKE_PROGRAM_PATH=${target.rootProject.projectDir.absolutePath.replace('\\', '/')}/.local_tools/gettext/bin"
                         )
                     }
                 }

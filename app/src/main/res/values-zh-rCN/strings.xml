@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name_release">小企鹅输入法.fx</string>
-    <string name="app_name_debug">小企鹅输入法.fx (调试)</string>
+    <string name="app_name_release">小企鹅输入法.pt</string>
+    <string name="app_name_debug">小企鹅输入法.pt (调试)</string>
     <string name="app_name_mainline_release">小企鹅输入法</string>
     <string name="app_name_mainline_debug">小企鹅输入法 (调试)</string>
     <string name="save">保存</string>
@@ -10,6 +10,16 @@
     <string name="conf">配置</string>
     <string name="global_options">全局选项</string>
     <string name="advanced">高级</string>
+    <string name="app_language">语言</string>
+    <string name="language_system_default">系统默认</string>
+    <string name="language_english">English</string>
+    <string name="language_chinese_simplified">简体中文</string>
+    <string name="language_chinese_traditional">繁體中文</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_korean">한국어</string>
+    <string name="language_german">Deutsch</string>
+    <string name="language_russian">Русский</string>
+    <string name="language_spanish">Español</string>
     <string name="ignore_sys_cursor">忽略系统光标位置</string>
     <string name="hide_key_config">隐藏快捷键配置</string>
     <string name="allow_original_plugins">允许第三方 Fcitx5 插件</string>
@@ -364,6 +374,8 @@
     <string name="open_rime_user_data_dir">即将打开应用数据目录。 RIME 用户数据目录位于“data/rime”。</string>
     <string name="generic_multiselect_min">至少需要选择 %1$d 项。</string>
     <string name="space_swipe_move_cursor">划动空格键以移动光标</string>
+    <string name="backspace_swipe_up_delete_all">上滑退格键删除所有文字</string>
+    <string name="space_swipe_up_behavior">空格键上滑行为</string>
     <string name="please_wait">请稍候…</string>
     <string name="rotate">旋转</string>
     <string name="flip">翻转</string>
@@ -632,4 +644,49 @@
     <string name="edit_monet_theme">编辑 Monet 主题</string>
 
     <string name="text_keyboard_layout_save_failed">保存布局失败。请查看 logcat 获取详细信息。</string>
+
+    <!-- Virtual Keyboard category titles -->
+    <string name="category_appearance">外观</string>
+    <string name="category_layout">布局</string>
+    <string name="category_keys">按键</string>
+    <string name="category_gestures">手势</string>
+    <string name="category_splits">分词</string>
+    <string name="category_keyboard_display">键盘显示</string>
+    <string name="category_feedback">反馈</string>
+    <string name="category_advanced">高级</string>
+    <string name="category_toolbar">工具栏</string>
+
+    <!-- Key Editor: swipe/long press section labels -->
+    <string name="key_editor_swipe_longpress_label">滑动/长按功能设置</string>
+    <string name="key_editor_popup_preview_label">Popup提示设置</string>
+    <string name="key_editor_swipe_up_hint">上滑提示</string>
+    <string name="key_editor_swipe_down_hint">下滑提示</string>
+    <string name="key_editor_swipe_left_hint">左滑提示</string>
+    <string name="key_editor_swipe_right_hint">右滑提示</string>
+    <string name="key_editor_longpress_hint">长按提示</string>
+    <string name="key_editor_swipe_up_btn">上滑 (↑)</string>
+    <string name="key_editor_swipe_down_btn">下滑 (↓)</string>
+    <string name="key_editor_swipe_left_btn">左滑 (←)</string>
+    <string name="key_editor_swipe_right_btn">右滑 (→)</string>
+    <string name="key_editor_longpress_btn">长按</string>
+    <string name="key_editor_swipe_up_event">上滑事件</string>
+    <string name="key_editor_swipe_down_event">下滑事件</string>
+    <string name="key_editor_swipe_left_event">左滑事件</string>
+    <string name="key_editor_swipe_right_event">右滑事件</string>
+    <string name="key_editor_longpress_event">长按事件</string>
+    <string name="key_editor_custom_behavior_label">自定义功能按键行为</string>
+
+    <!-- Key type display names -->
+    <string name="key_type_alphabet">字母键</string>
+    <string name="key_type_caps">大小写键</string>
+    <string name="key_type_layout_switch">布局切换键</string>
+    <string name="key_type_comma">逗号键</string>
+    <string name="key_type_language">语言键</string>
+    <string name="key_type_space">空格键</string>
+    <string name="key_type_symbol">符号键</string>
+    <string name="key_type_return">回车键</string>
+    <string name="key_type_backspace">退格键</string>
+    <string name="key_type_macro">宏键</string>
+    <string name="key_editor_popup_hint">只有设置了滑动功能或长按功能后才会启用提示</string>
+    <string name="app_language_restart_warning">更换语言后将重启应用以应用更改</string>
 </resources>

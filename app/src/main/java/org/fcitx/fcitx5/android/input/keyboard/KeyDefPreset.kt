@@ -33,7 +33,8 @@ class SymbolKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    extraBehaviors: Set<Behavior> = emptySet()
 ) : KeyDef(
     Appearance.Text(
         displayText = symbol,
@@ -49,7 +50,7 @@ class SymbolKey(
     ),
     setOf(
         Behavior.Press(KeyAction.FcitxKeyAction(symbol))
-    ),
+    ) + extraBehaviors,
     popup ?: arrayOf(
         Popup.Preview(symbol),
         Popup.Keyboard(symbol)
@@ -60,6 +61,7 @@ class AlphabetKey(
     val character: String,
     val punctuation: String,
     val displayText: String = character,
+    val hintText: String? = null,
     variant: Variant = Variant.Normal,
     popup: Array<Popup>? = null,
     weight: Float? = null,
@@ -70,12 +72,24 @@ class AlphabetKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    val swipeUpPopupText: String? = null,
+    val swipeDownPopupText: String? = null,
+    val swipeLeftPopupText: String? = null,
+    val swipeRightPopupText: String? = null,
+    val longPressPopupText: String? = null,
+    val swipeUpPopupEnabled: Boolean = true,
+    val swipeDownPopupEnabled: Boolean = true,
+    val swipeLeftPopupEnabled: Boolean = true,
+    val swipeRightPopupEnabled: Boolean = true,
+    val longPressPopupEnabled: Boolean = true,
+    extraBehaviors: Set<Behavior> = emptySet()
 ) : KeyDef(
     Appearance.AltText(
         displayText = displayText,
         altText = punctuation,
         character = character,
+        hintText = hintText,
         textSize = 23f,
         variant = variant,
         percentWidth = weight ?: 0.1f,
@@ -91,12 +105,56 @@ class AlphabetKey(
     setOf(
         Behavior.Press(KeyAction.FcitxKeyAction(character)),
         Behavior.Swipe(KeyAction.FcitxKeyAction(punctuation))
-    ),
-    popup ?: arrayOf(
-        Popup.AltPreview(character, punctuation),
-        Popup.Keyboard(character)
-    )
-)
+    ) + extraBehaviors,
+    popup ?: buildAlphabetPopup(character, punctuation, swipeUpPopupText, swipeDownPopupText, swipeLeftPopupText, swipeRightPopupText, longPressPopupText, swipeUpPopupEnabled, swipeDownPopupEnabled, swipeLeftPopupEnabled, swipeRightPopupEnabled, longPressPopupEnabled)
+) {
+    companion object {
+        private fun buildAlphabetPopup(
+            character: String,
+            punctuation: String,
+            swipeUpPopupText: String?,
+            swipeDownPopupText: String?,
+            swipeLeftPopupText: String?,
+            swipeRightPopupText: String?,
+            longPressPopupText: String?,
+            swipeUpPopupEnabled: Boolean,
+            swipeDownPopupEnabled: Boolean,
+            swipeLeftPopupEnabled: Boolean,
+            swipeRightPopupEnabled: Boolean,
+            longPressPopupEnabled: Boolean
+        ): Array<Popup> {
+            val hasAnyPopupText = swipeUpPopupText != null || swipeDownPopupText != null ||
+                    swipeLeftPopupText != null || swipeRightPopupText != null || longPressPopupText != null
+
+            val popupList = mutableListOf<Popup>()
+
+            if (hasAnyPopupText) {
+                // Use CustomAltPreview which bypasses the global popupOnKeyPress toggle
+                popupList.add(Popup.CustomAltPreview(
+                    content = character,
+                    swipeUpPopup = swipeUpPopupText,
+                    swipeDownPopup = swipeDownPopupText,
+                    swipeLeftPopup = swipeLeftPopupText,
+                    swipeRightPopup = swipeRightPopupText,
+                    longPressPopup = longPressPopupText,
+                    swipeUpEnabled = swipeUpPopupEnabled,
+                    swipeDownEnabled = swipeDownPopupEnabled,
+                    swipeLeftEnabled = swipeLeftPopupEnabled,
+                    swipeRightEnabled = swipeRightPopupEnabled,
+                    longPressEnabled = longPressPopupEnabled
+                ))
+            } else {
+                popupList.add(Popup.AltPreview(character, punctuation))
+            }
+
+            // Only add Keyboard popup for long-press candidate display
+            // Do NOT add popup texts to the long-press candidate area
+            popupList.add(Popup.Keyboard(character))
+
+            return popupList.toTypedArray()
+        }
+    }
+}
 
 class AlphabetDigitKey(
     val character: String,
@@ -138,7 +196,8 @@ class CapsKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    extraBehaviors: Set<Behavior> = emptySet()
 ) : KeyDef(
     Appearance.Image(
         src = R.drawable.ic_capslock_none,
@@ -156,7 +215,7 @@ class CapsKey(
         Behavior.Press(KeyAction.CapsAction(false)),
         Behavior.LongPress(KeyAction.CapsAction(true)),
         Behavior.DoubleTap(KeyAction.CapsAction(true))
-    )
+    ) + extraBehaviors
 )
 
 class LayoutSwitchKey(
@@ -169,7 +228,8 @@ class LayoutSwitchKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    extraBehaviors: Set<Behavior> = emptySet()
 ) : KeyDef(
     Appearance.Text(
         displayText,
@@ -187,7 +247,7 @@ class LayoutSwitchKey(
     ),
     setOf(
         Behavior.Press(KeyAction.LayoutSwitchAction(to))
-    ),
+    ) + extraBehaviors,
     arrayOf(
        Popup.Menu(
         // PickerWindow symbols or numberkeyboard switch
@@ -215,7 +275,8 @@ class BackspaceKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    extraBehaviors: Set<Behavior> = emptySet()
 ) : KeyDef(
     Appearance.Image(
         src = R.drawable.ic_baseline_backspace_24,
@@ -232,8 +293,9 @@ class BackspaceKey(
     ),
     setOf(
         Behavior.Press(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_BackSpace))),
-        Behavior.Repeat(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_BackSpace)))
-    )
+        Behavior.Repeat(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_BackSpace))),
+        Behavior.SwipeDir(KeyAction.DeleteAllAction, Behavior.SwipeDirection.Up)
+    ) + extraBehaviors
 )
 
 class QuickPhraseKey : KeyDef(
@@ -256,7 +318,8 @@ class CommaKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    extraBehaviors: Set<Behavior> = emptySet()
 ) : KeyDef(
     Appearance.ImageText(
         displayText = ",",
@@ -273,7 +336,7 @@ class CommaKey(
     ),
     setOf(
         Behavior.Press(KeyAction.FcitxKeyAction(","))
-    ),
+    ) + extraBehaviors,
     arrayOf(
         Popup.Preview(","),
         Popup.Menu(
@@ -305,7 +368,8 @@ class LanguageKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    extraBehaviors: Set<Behavior> = emptySet()
 ) : KeyDef(
     Appearance.Image(
         src = R.drawable.ic_baseline_language_24,
@@ -322,7 +386,7 @@ class LanguageKey(
     setOf(
         Behavior.Press(KeyAction.LangSwitchAction),
         Behavior.LongPress(KeyAction.ShowInputMethodPickerAction)
-    )
+    ) + extraBehaviors
 )
 
 class SpaceKey(
@@ -332,7 +396,12 @@ class SpaceKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    extraBehaviors: Set<Behavior> = emptySet(),
+    val swipeUp: MacroAction? = null,
+    val swipeDown: MacroAction? = null,
+    val swipeLeft: MacroAction? = null,
+    val swipeRight: MacroAction? = null
 ) : KeyDef(
     Appearance.Text(
         displayText = " ",
@@ -348,11 +417,35 @@ class SpaceKey(
         shadowColor = shadowColor,
         shadowColorMonet = shadowColorMonet
     ),
-    setOf(
-        Behavior.Press(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_space))),
-        Behavior.LongPress(KeyAction.SpaceLongPressAction)
-    )
-)
+    buildSpaceBehaviors(swipeUp, swipeDown, swipeLeft, swipeRight) + extraBehaviors
+) {
+    companion object {
+        private fun buildSpaceBehaviors(
+            swipeUp: MacroAction?,
+            swipeDown: MacroAction?,
+            swipeLeft: MacroAction?,
+            swipeRight: MacroAction?
+        ): Set<Behavior> {
+            val behaviors = mutableSetOf(
+                Behavior.Press(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_space))),
+                Behavior.LongPress(KeyAction.SpaceLongPressAction)
+            )
+            if (swipeUp != null) {
+                behaviors.add(Behavior.SwipeDir(swipeUp, Behavior.SwipeDirection.Up))
+            } else {
+                behaviors.add(Behavior.SwipeDir(KeyAction.SpaceSwipeUpAction, Behavior.SwipeDirection.Up))
+            }
+            if (swipeDown != null) {
+                behaviors.add(Behavior.SwipeDir(swipeDown, Behavior.SwipeDirection.Down))
+            } else {
+                behaviors.add(Behavior.SwipeDir(KeyAction.SpaceSwipeDownAction, Behavior.SwipeDirection.Down))
+            }
+            swipeLeft?.let { behaviors.add(Behavior.SwipeDir(it, Behavior.SwipeDirection.Left)) }
+            swipeRight?.let { behaviors.add(Behavior.SwipeDir(it, Behavior.SwipeDirection.Right)) }
+            return behaviors
+        }
+    }
+}
 
 class ReturnKey(
     percentWidth: Float = 0.15f,
@@ -361,7 +454,8 @@ class ReturnKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    extraBehaviors: Set<Behavior> = emptySet()
 ) : KeyDef(
     Appearance.Image(
         src = R.drawable.ic_baseline_keyboard_return_24,
@@ -379,7 +473,7 @@ class ReturnKey(
     ),
     setOf(
         Behavior.Press(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_Return)))
-    ),
+    ) + extraBehaviors,
     arrayOf(
         Popup.Menu(
             arrayOf(
@@ -497,6 +591,10 @@ class MacroKey(
     val longPressLabel: String? = null,
     val tap: MacroAction,
     val swipe: MacroAction? = null,
+    val swipeUp: MacroAction? = null,
+    val swipeDown: MacroAction? = null,
+    val swipeLeft: MacroAction? = null,
+    val swipeRight: MacroAction? = null,
     val longPress: MacroAction? = null,
     percentWidth: Float = 0.1f,
     variant: Variant = Variant.Normal,
@@ -526,7 +624,7 @@ class MacroKey(
         shadowColor = shadowColor,
         shadowColorMonet = shadowColorMonet
     ),
-    buildBehaviors(tap, swipe, longPress),
+    buildBehaviors(tap, swipe, swipeUp, swipeDown, swipeLeft, swipeRight, longPress),
     buildPopup(popup, tap, label, longPress, longPressLabel)
 ) {
     private companion object {
@@ -596,11 +694,19 @@ class MacroKey(
         fun buildBehaviors(
             tap: MacroAction,
             swipe: MacroAction?,
+            swipeUp: MacroAction?,
+            swipeDown: MacroAction?,
+            swipeLeft: MacroAction?,
+            swipeRight: MacroAction?,
             longPress: MacroAction?
         ): Set<Behavior> {
             return buildSet {
                 add(Behavior.Press(tap))
                 swipe?.let { add(Behavior.Swipe(it)) }
+                swipeUp?.let { add(Behavior.SwipeDir(it, Behavior.SwipeDirection.Up)) }
+                swipeDown?.let { add(Behavior.SwipeDir(it, Behavior.SwipeDirection.Down)) }
+                swipeLeft?.let { add(Behavior.SwipeDir(it, Behavior.SwipeDirection.Left)) }
+                swipeRight?.let { add(Behavior.SwipeDir(it, Behavior.SwipeDirection.Right)) }
                 longPress?.let { add(Behavior.LongPress(it)) }
             }
         }

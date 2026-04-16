@@ -33,6 +33,8 @@ import org.fcitx.fcitx5.android.input.keyboard.KeyAction.ShowInputMethodPickerAc
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.SpaceLongPressAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.SymAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.UnicodeAction
+import org.fcitx.fcitx5.android.input.keyboard.SpaceSwipeDownBehavior
+import org.fcitx.fcitx5.android.input.keyboard.SpaceSwipeUpBehavior
 import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import org.fcitx.fcitx5.android.input.wm.InputWindowManager
 import org.fcitx.fcitx5.android.utils.InputMethodUtil
@@ -195,6 +197,42 @@ class CommonKeyActionListener :
                         }
                         SpaceLongPressBehavior.ShowPicker -> showInputMethodPicker()
                         SpaceLongPressBehavior.VoiceInput -> switchToVoiceInput()
+                    }
+                }
+                is KeyAction.DeleteAllAction -> {
+                    if (kbdPrefs.backspaceSwipeDeleteAll.getValue()) {
+                        service.postFcitxJob {
+                            reset()
+                        }
+                        val ic = service.currentInputConnection
+                        if (ic != null) {
+                            ic.performContextMenuAction(android.R.id.selectAll)
+                            ic.commitText("", 1)
+                        }
+                    }
+                }
+                is KeyAction.SpaceSwipeUpAction -> {
+                    when (kbdPrefs.spaceSwipeUpBehavior.getValue()) {
+                        SpaceSwipeUpBehavior.None -> {}
+                        SpaceSwipeUpBehavior.Enumerate -> service.postFcitxJob {
+                            enumerateIme()
+                        }
+                        SpaceSwipeUpBehavior.ToggleActivate -> service.postFcitxJob {
+                            toggleIme()
+                        }
+                        SpaceSwipeUpBehavior.ShowPicker -> showInputMethodPicker()
+                    }
+                }
+                is KeyAction.SpaceSwipeDownAction -> {
+                    when (kbdPrefs.spaceSwipeDownBehavior.getValue()) {
+                        SpaceSwipeDownBehavior.None -> {}
+                        SpaceSwipeDownBehavior.Enumerate -> service.postFcitxJob {
+                            enumerateIme()
+                        }
+                        SpaceSwipeDownBehavior.ToggleActivate -> service.postFcitxJob {
+                            toggleIme()
+                        }
+                        SpaceSwipeDownBehavior.ShowPicker -> showInputMethodPicker()
                     }
                 }
                 else -> {}

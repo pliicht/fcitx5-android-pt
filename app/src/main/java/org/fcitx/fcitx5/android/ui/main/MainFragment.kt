@@ -7,11 +7,15 @@ package org.fcitx.fcitx5.android.ui.main
 import android.os.Bundle
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.activityViewModels
 import androidx.preference.PreferenceCategory
 import org.fcitx.fcitx5.android.R
+import org.fcitx.fcitx5.android.data.prefs.AppLanguage
+import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.ui.common.PaddingPreferenceFragment
 import org.fcitx.fcitx5.android.ui.main.settings.SettingsRoute
+import org.fcitx.fcitx5.android.utils.AppUtil
 import org.fcitx.fcitx5.android.utils.addCategory
 import org.fcitx.fcitx5.android.utils.addPreference
 import org.fcitx.fcitx5.android.utils.navigateWithAnim
@@ -40,9 +44,39 @@ class MainFragment : PaddingPreferenceFragment() {
         }
     }
 
+    private fun PreferenceCategory.addLanguagePreference() {
+        val langPref = AppPrefs.getInstance().advanced.appLanguage
+        val pref = androidx.preference.Preference(context).apply {
+            setTitle(R.string.app_language)
+            setIcon(R.drawable.ic_baseline_translate_24)
+            summary = context.getString(langPref.getValue().stringRes)
+            setOnPreferenceClickListener {
+                val ctx = requireContext()
+                val cur = langPref.getValue()
+                val entries = AppLanguage.entries.map { ctx.getString(it.stringRes) }.toTypedArray()
+                val currentIndex = AppLanguage.entries.indexOf(cur)
+                AlertDialog.Builder(ctx)
+                    .setTitle(R.string.app_language)
+                    .setSingleChoiceItems(entries, currentIndex) { dialog, which ->
+                        val selected = AppLanguage.entries[which]
+                        if (selected != cur) {
+                            langPref.setValue(selected)
+                            AppUtil.applyLanguageAndRestart(ctx, selected)
+                        }
+                        dialog.dismiss()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                true
+            }
+        }
+        addPreference(pref)
+    }
+
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceScreen = preferenceManager.createPreferenceScreen(requireContext()).apply {
             addCategory("Fcitx") {
+                addLanguagePreference()
                 addDestinationPreference(
                     R.string.global_options,
                     R.drawable.ic_baseline_tune_24,

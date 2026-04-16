@@ -28,6 +28,7 @@ object LayoutJsonUtils {
         "type",
         "main",
         "alt",
+        "hint",
         "displayText",
         "label",
         "altLabel",
@@ -35,7 +36,21 @@ object LayoutJsonUtils {
         "weight",
         "tap",
         "swipe",
+        "swipeUp",
+        "swipeDown",
+        "swipeLeft",
+        "swipeRight",
         "longPress",
+        "swipeUpPopup",
+        "swipeDownPopup",
+        "swipeLeftPopup",
+        "swipeRightPopup",
+        "longPressPopup",
+        "swipeUpPopupEnabled",
+        "swipeDownPopupEnabled",
+        "swipeLeftPopupEnabled",
+        "swipeRightPopupEnabled",
+        "longPressPopupEnabled",
         "textColor",
         "textColorMonet",
         "altTextColor",
@@ -173,6 +188,7 @@ object LayoutJsonUtils {
             type = type,
             main = obj["main"]?.jsonPrimitive?.content,
             alt = obj["alt"]?.jsonPrimitive?.content,
+            hint = obj["hint"]?.jsonPrimitive?.content,
             displayText = obj["displayText"],  // AlphabetKey 和 MacroKey 共用
             label = obj["label"]?.jsonPrimitive?.content,
             altLabel = obj["altLabel"]?.jsonPrimitive?.content,
@@ -189,7 +205,21 @@ object LayoutJsonUtils {
             shadowColorMonet = obj["shadowColorMonet"]?.jsonPrimitive?.contentOrNull,
             tap = obj["tap"]?.jsonObject?.let { parseMacroAction(it) },
             swipe = obj["swipe"]?.jsonObject?.let { parseMacroAction(it) },
-            longPress = obj["longPress"]?.jsonObject?.let { parseMacroAction(it) }
+            swipeUp = obj["swipeUp"]?.jsonObject?.let { parseMacroAction(it) },
+            swipeDown = obj["swipeDown"]?.jsonObject?.let { parseMacroAction(it) },
+            swipeLeft = obj["swipeLeft"]?.jsonObject?.let { parseMacroAction(it) },
+            swipeRight = obj["swipeRight"]?.jsonObject?.let { parseMacroAction(it) },
+            longPress = obj["longPress"]?.jsonObject?.let { parseMacroAction(it) },
+            swipeUpPopup = obj["swipeUpPopup"]?.jsonPrimitive?.content,
+            swipeDownPopup = obj["swipeDownPopup"]?.jsonPrimitive?.content,
+            swipeLeftPopup = obj["swipeLeftPopup"]?.jsonPrimitive?.content,
+            swipeRightPopup = obj["swipeRightPopup"]?.jsonPrimitive?.content,
+            longPressPopup = obj["longPressPopup"]?.jsonPrimitive?.content,
+            swipeUpPopupEnabled = obj["swipeUpPopupEnabled"]?.jsonPrimitive?.booleanOrNull ?: true,
+            swipeDownPopupEnabled = obj["swipeDownPopupEnabled"]?.jsonPrimitive?.booleanOrNull ?: true,
+            swipeLeftPopupEnabled = obj["swipeLeftPopupEnabled"]?.jsonPrimitive?.booleanOrNull ?: true,
+            swipeRightPopupEnabled = obj["swipeRightPopupEnabled"]?.jsonPrimitive?.booleanOrNull ?: true,
+            longPressPopupEnabled = obj["longPressPopupEnabled"]?.jsonPrimitive?.booleanOrNull ?: true
         )
     }
 
@@ -386,6 +416,7 @@ object LayoutJsonUtils {
         val type: String,
         val main: String? = null,
         val alt: String? = null,
+        val hint: String? = null,
         val displayText: JsonElement? = null,  // AlphabetKey 和 MacroKey 共用
         val label: String? = null,  // MacroKey/SymbolKey/LayoutSwitchKey 使用
         val altLabel: String? = null,  // MacroKey 使用
@@ -402,7 +433,21 @@ object LayoutJsonUtils {
         val shadowColorMonet: String? = null,
         val tap: MacroAction? = null,  // MacroKey 使用
         val swipe: MacroAction? = null,  // MacroKey 使用
-        val longPress: MacroAction? = null  // MacroKey 使用
+        val swipeUp: MacroAction? = null,
+        val swipeDown: MacroAction? = null,
+        val swipeLeft: MacroAction? = null,
+        val swipeRight: MacroAction? = null,
+        val longPress: MacroAction? = null,
+        val swipeUpPopup: String? = null,
+        val swipeDownPopup: String? = null,
+        val swipeLeftPopup: String? = null,
+        val swipeRightPopup: String? = null,
+        val longPressPopup: String? = null,
+        val swipeUpPopupEnabled: Boolean = true,
+        val swipeDownPopupEnabled: Boolean = true,
+        val swipeLeftPopupEnabled: Boolean = true,
+        val swipeRightPopupEnabled: Boolean = true,
+        val longPressPopupEnabled: Boolean = true
     )
 
     /**
@@ -441,8 +486,19 @@ object LayoutJsonUtils {
             is AlphabetKey -> {
                 json["main"] = keyDef.character
                 json["alt"] = keyDef.punctuation
+                keyDef.hintText?.let { json["hint"] = it }
                 json["displayText"] = keyDef.displayText
                 json["weight"] = appearance.percentWidth.takeIf { it != 0.1f }
+                keyDef.swipeUpPopupText?.let { json["swipeUpPopup"] = it }
+                keyDef.swipeDownPopupText?.let { json["swipeDownPopup"] = it }
+                keyDef.swipeLeftPopupText?.let { json["swipeLeftPopup"] = it }
+                keyDef.swipeRightPopupText?.let { json["swipeRightPopup"] = it }
+                keyDef.longPressPopupText?.let { json["longPressPopup"] = it }
+                if (!keyDef.swipeUpPopupEnabled) json["swipeUpPopupEnabled"] = false
+                if (!keyDef.swipeDownPopupEnabled) json["swipeDownPopupEnabled"] = false
+                if (!keyDef.swipeLeftPopupEnabled) json["swipeLeftPopupEnabled"] = false
+                if (!keyDef.swipeRightPopupEnabled) json["swipeRightPopupEnabled"] = false
+                if (!keyDef.longPressPopupEnabled) json["longPressPopupEnabled"] = false
             }
             is CapsKey -> {
                 json["weight"] = appearance.percentWidth
@@ -481,12 +537,43 @@ object LayoutJsonUtils {
                 }
                 json["tap"] = macroActionToJson(keyDef.tap)
                 keyDef.swipe?.let { json["swipe"] = macroActionToJson(it) }
+                keyDef.swipeUp?.let { json["swipeUp"] = macroActionToJson(it) }
+                keyDef.swipeDown?.let { json["swipeDown"] = macroActionToJson(it) }
+                keyDef.swipeLeft?.let { json["swipeLeft"] = macroActionToJson(it) }
+                keyDef.swipeRight?.let { json["swipeRight"] = macroActionToJson(it) }
                 keyDef.longPress?.let { json["longPress"] = macroActionToJson(it) }
                 json["weight"] = appearance.percentWidth.takeIf { it != 0.1f }
             }
         }
 
+        extractSwipeBehaviors(keyDef)?.let { swipeMap ->
+            swipeMap.forEach { (k, v) -> json[k] = v }
+        }
+
         return json
+    }
+
+    private fun extractSwipeBehaviors(keyDef: KeyDef): Map<String, JsonObject>? {
+        if (keyDef is MacroKey) return null
+        val swipeActions = mutableMapOf<String, JsonObject>()
+        keyDef.behaviors.filterIsInstance<KeyDef.Behavior.SwipeDir>().forEach { behavior ->
+            val action = behavior.action
+            if (action is MacroAction) {
+                when (behavior.direction) {
+                    KeyDef.Behavior.SwipeDirection.Up -> swipeActions["swipeUp"] = macroActionToJson(action)
+                    KeyDef.Behavior.SwipeDirection.Down -> swipeActions["swipeDown"] = macroActionToJson(action)
+                    KeyDef.Behavior.SwipeDirection.Left -> swipeActions["swipeLeft"] = macroActionToJson(action)
+                    KeyDef.Behavior.SwipeDirection.Right -> swipeActions["swipeRight"] = macroActionToJson(action)
+                }
+            }
+        }
+        keyDef.behaviors.filterIsInstance<KeyDef.Behavior.LongPress>().forEach { behavior ->
+            val action = behavior.action
+            if (action is MacroAction) {
+                swipeActions["longPress"] = macroActionToJson(action)
+            }
+        }
+        return if (swipeActions.isNotEmpty()) swipeActions else null
     }
 
     /**
@@ -558,6 +645,13 @@ object LayoutJsonUtils {
      * @return 转换后的 KeyDef
      */
     fun createKeyDef(key: KeyJson, subModeLabel: String = "", subModeName: String = ""): KeyDef {
+        val extraBehaviors = mutableSetOf<KeyDef.Behavior>()
+        key.swipeUp?.let { extraBehaviors.add(KeyDef.Behavior.SwipeDir(it, KeyDef.Behavior.SwipeDirection.Up)) }
+        key.swipeDown?.let { extraBehaviors.add(KeyDef.Behavior.SwipeDir(it, KeyDef.Behavior.SwipeDirection.Down)) }
+        key.swipeLeft?.let { extraBehaviors.add(KeyDef.Behavior.SwipeDir(it, KeyDef.Behavior.SwipeDirection.Left)) }
+        key.swipeRight?.let { extraBehaviors.add(KeyDef.Behavior.SwipeDir(it, KeyDef.Behavior.SwipeDirection.Right)) }
+        key.longPress?.let { extraBehaviors.add(KeyDef.Behavior.LongPress(it)) }
+
         return when (key.type) {
             "AlphabetKey" -> AlphabetKey(
                 character = key.main ?: "",
@@ -568,6 +662,7 @@ object LayoutJsonUtils {
                     subModeName,
                     key.main ?: ""
                 ),
+                hintText = key.hint,
                 weight = key.weight,
                 textColor = key.textColor,
                 textColorMonet = key.textColorMonet,
@@ -576,7 +671,18 @@ object LayoutJsonUtils {
                 backgroundColor = key.backgroundColor,
                 backgroundColorMonet = key.backgroundColorMonet,
                 shadowColor = key.shadowColor,
-                shadowColorMonet = key.shadowColorMonet
+                shadowColorMonet = key.shadowColorMonet,
+                swipeUpPopupText = key.swipeUpPopup,
+                swipeDownPopupText = key.swipeDownPopup,
+                swipeLeftPopupText = key.swipeLeftPopup,
+                swipeRightPopupText = key.swipeRightPopup,
+                longPressPopupText = key.longPressPopup,
+                swipeUpPopupEnabled = key.swipeUpPopupEnabled,
+                swipeDownPopupEnabled = key.swipeDownPopupEnabled,
+                swipeLeftPopupEnabled = key.swipeLeftPopupEnabled,
+                swipeRightPopupEnabled = key.swipeRightPopupEnabled,
+                longPressPopupEnabled = key.longPressPopupEnabled,
+                extraBehaviors = extraBehaviors
             )
             "CapsKey" -> CapsKey(
                 percentWidth = key.weight ?: 0.15f,
@@ -585,7 +691,8 @@ object LayoutJsonUtils {
                 backgroundColor = key.backgroundColor,
                 backgroundColorMonet = key.backgroundColorMonet,
                 shadowColor = key.shadowColor,
-                shadowColorMonet = key.shadowColorMonet
+                shadowColorMonet = key.shadowColorMonet,
+                extraBehaviors = extraBehaviors
             )
             "LayoutSwitchKey" -> LayoutSwitchKey(
                 displayText = key.label ?: "?123",
@@ -596,7 +703,8 @@ object LayoutJsonUtils {
                 backgroundColor = key.backgroundColor,
                 backgroundColorMonet = key.backgroundColorMonet,
                 shadowColor = key.shadowColor,
-                shadowColorMonet = key.shadowColorMonet
+                shadowColorMonet = key.shadowColorMonet,
+                extraBehaviors = extraBehaviors
             )
             "CommaKey" -> CommaKey(
                 percentWidth = key.weight ?: 0.1f,
@@ -606,7 +714,8 @@ object LayoutJsonUtils {
                 backgroundColor = key.backgroundColor,
                 backgroundColorMonet = key.backgroundColorMonet,
                 shadowColor = key.shadowColor,
-                shadowColorMonet = key.shadowColorMonet
+                shadowColorMonet = key.shadowColorMonet,
+                extraBehaviors = extraBehaviors
             )
             "LanguageKey" -> LanguageKey(
                 percentWidth = key.weight ?: 0.1f,
@@ -615,7 +724,8 @@ object LayoutJsonUtils {
                 backgroundColor = key.backgroundColor,
                 backgroundColorMonet = key.backgroundColorMonet,
                 shadowColor = key.shadowColor,
-                shadowColorMonet = key.shadowColorMonet
+                shadowColorMonet = key.shadowColorMonet,
+                extraBehaviors = extraBehaviors
             )
             "SpaceKey" -> SpaceKey(
                 percentWidth = key.weight ?: 0f,
@@ -624,7 +734,12 @@ object LayoutJsonUtils {
                 backgroundColor = key.backgroundColor,
                 backgroundColorMonet = key.backgroundColorMonet,
                 shadowColor = key.shadowColor,
-                shadowColorMonet = key.shadowColorMonet
+                shadowColorMonet = key.shadowColorMonet,
+                extraBehaviors = extraBehaviors,
+                swipeUp = key.swipeUp,
+                swipeDown = key.swipeDown,
+                swipeLeft = key.swipeLeft,
+                swipeRight = key.swipeRight
             )
             "SymbolKey" -> SymbolKey(
                 symbol = key.label ?: ".",
@@ -635,7 +750,8 @@ object LayoutJsonUtils {
                 backgroundColor = key.backgroundColor,
                 backgroundColorMonet = key.backgroundColorMonet,
                 shadowColor = key.shadowColor,
-                shadowColorMonet = key.shadowColorMonet
+                shadowColorMonet = key.shadowColorMonet,
+                extraBehaviors = extraBehaviors
             )
             "ReturnKey" -> ReturnKey(
                 percentWidth = key.weight ?: 0.15f,
@@ -644,7 +760,8 @@ object LayoutJsonUtils {
                 backgroundColor = key.backgroundColor,
                 backgroundColorMonet = key.backgroundColorMonet,
                 shadowColor = key.shadowColor,
-                shadowColorMonet = key.shadowColorMonet
+                shadowColorMonet = key.shadowColorMonet,
+                extraBehaviors = extraBehaviors
             )
             "BackspaceKey" -> BackspaceKey(
                 percentWidth = key.weight ?: 0.15f,
@@ -653,7 +770,8 @@ object LayoutJsonUtils {
                 backgroundColor = key.backgroundColor,
                 backgroundColorMonet = key.backgroundColorMonet,
                 shadowColor = key.shadowColor,
-                shadowColorMonet = key.shadowColorMonet
+                shadowColorMonet = key.shadowColorMonet,
+                extraBehaviors = extraBehaviors
             )
             "MacroKey" -> {
                 val tap = key.tap ?: throw IllegalArgumentException("MacroKey requires 'tap' action")
@@ -674,6 +792,10 @@ object LayoutJsonUtils {
                     longPressLabel = key.longPressLabel,
                     tap = tap,
                     swipe = key.swipe,
+                    swipeUp = key.swipeUp,
+                    swipeDown = key.swipeDown,
+                    swipeLeft = key.swipeLeft,
+                    swipeRight = key.swipeRight,
                     longPress = key.longPress,
                     percentWidth = key.weight ?: 0.1f,
                     textColor = key.textColor,

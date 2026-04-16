@@ -17,11 +17,14 @@ import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.text.Editable
 import android.text.TextWatcher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.appcompat.widget.Toolbar
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -102,7 +105,18 @@ class KeyEditorActivity : AppCompatActivity() {
 
     private var alphabetMainEdit: EditText? = null
     private var alphabetAltEdit: EditText? = null
+    private var alphabetHintTextEdit: EditText? = null
     private var alphabetWeightEdit: EditText? = null
+    private var alphabetSwipeUpPopupEdit: EditText? = null
+    private var alphabetSwipeDownPopupEdit: EditText? = null
+    private var alphabetSwipeLeftPopupEdit: EditText? = null
+    private var alphabetSwipeRightPopupEdit: EditText? = null
+    private var alphabetLongPressPopupEdit: EditText? = null
+    private var alphabetSwipeUpPopupEnabledSwitch: SwitchCompat? = null
+    private var alphabetSwipeDownPopupEnabledSwitch: SwitchCompat? = null
+    private var alphabetSwipeLeftPopupEnabledSwitch: SwitchCompat? = null
+    private var alphabetSwipeRightPopupEnabledSwitch: SwitchCompat? = null
+    private var alphabetLongPressPopupEnabledSwitch: SwitchCompat? = null
     private var alphabetDisplayTextSimpleEdit: EditText? = null
     private var alphabetDisplayTextModeSpecific = false
     private var alphabetDisplayTextSimpleValue = ""
@@ -128,13 +142,22 @@ class KeyEditorActivity : AppCompatActivity() {
 
     private var simpleWeightEdit: EditText? = null
 
-    private var macroTapStepsData: List<Any> = emptyList()
-    private var macroSwipeStepsData: List<Any> = emptyList()
-    private var macroLongPressStepsData: List<Any> = emptyList()
-    private var macroEditCallback: ((List<Any>) -> Unit)? = null
+    private var macroTapStepsData: List<Map<*, *>> = emptyList()
+    private var macroSwipeStepsData: List<Map<*, *>> = emptyList()
+    private var macroSwipeUpStepsData: List<Map<*, *>> = emptyList()
+    private var macroSwipeDownStepsData: List<Map<*, *>> = emptyList()
+    private var macroSwipeLeftStepsData: List<Map<*, *>> = emptyList()
+    private var macroSwipeRightStepsData: List<Map<*, *>> = emptyList()
+    private var macroLongPressStepsData: List<Map<*, *>> = emptyList()
+    private var macroEditCallback: ((List<Map<*, *>>) -> Unit)? = null
     private var saveMenuItem: MenuItem? = null
     private var deleteMenuItem: MenuItem? = null
     private var baselineKeySnapshot: String = ""
+    
+    private var pendingBackspaceSwipeDeleteAll: Boolean? = null
+    private var pendingSpaceSwipeMoveCursor: Boolean? = null
+    private var pendingSpaceSwipeUpBehavior: org.fcitx.fcitx5.android.input.keyboard.SpaceSwipeUpBehavior? = null
+    private var pendingSpaceLongPressBehavior: org.fcitx.fcitx5.android.input.keyboard.SpaceLongPressBehavior? = null
     private val editableColorFields = listOf(
         EditableColorField(
             customKey = "textColor",
@@ -168,7 +191,7 @@ class KeyEditorActivity : AppCompatActivity() {
             val data = result.data ?: return@registerForActivityResult
             if (result.resultCode != RESULT_OK) return@registerForActivityResult
             val steps = data.serializable<ArrayList<Map<*, *>>>(MacroEditorActivity.EXTRA_MACRO_RESULT) ?: return@registerForActivityResult
-            macroEditCallback?.invoke(steps.map { it as Any })
+            macroEditCallback?.invoke(steps)
         }
 
     private val colorEditorLauncher =
@@ -281,7 +304,18 @@ class KeyEditorActivity : AppCompatActivity() {
         fieldsContainer.removeAllViews()
         alphabetMainEdit = null
         alphabetAltEdit = null
+        alphabetHintTextEdit = null
         alphabetWeightEdit = null
+        alphabetSwipeUpPopupEdit = null
+        alphabetSwipeDownPopupEdit = null
+        alphabetSwipeLeftPopupEdit = null
+        alphabetSwipeRightPopupEdit = null
+        alphabetLongPressPopupEdit = null
+        alphabetSwipeUpPopupEnabledSwitch = null
+        alphabetSwipeDownPopupEnabledSwitch = null
+        alphabetSwipeLeftPopupEnabledSwitch = null
+        alphabetSwipeRightPopupEnabledSwitch = null
+        alphabetLongPressPopupEnabledSwitch = null
         alphabetDisplayTextSimpleEdit = null
         alphabetDisplayTextRowBindings.clear()
         layoutSwitchLabelEdit = null
@@ -332,12 +366,17 @@ class KeyEditorActivity : AppCompatActivity() {
                     getString(R.string.text_keyboard_layout_key_alt),
                     keyData["alt"] as? String ?: ""
                 )
+                val hintTextEdit = uiBuilder.createEditField(
+                    getString(R.string.text_keyboard_layout_key_hint),
+                    keyData["hint"] as? String ?: ""
+                )
                 val weightEdit = uiBuilder.createEditField(
                     getString(R.string.text_keyboard_layout_key_weight),
                     (keyData["weight"] as? Number)?.toString() ?: ""
                 )
                 fieldsContainer.addView(mainEdit.first)
                 fieldsContainer.addView(altEdit.first)
+                fieldsContainer.addView(hintTextEdit.first)
                 fieldsContainer.addView(weightEdit.first)
 
                 val displayTextContainer = LinearLayout(this).apply {
@@ -347,6 +386,7 @@ class KeyEditorActivity : AppCompatActivity() {
 
                 alphabetMainEdit = mainEdit.second
                 alphabetAltEdit = altEdit.second
+                alphabetHintTextEdit = hintTextEdit.second
                 alphabetWeightEdit = weightEdit.second
 
                 uiBuilder.renderDisplayTextEditor(
@@ -367,6 +407,202 @@ class KeyEditorActivity : AppCompatActivity() {
                     alphabetDisplayTextSimpleEdit = simpleTextEdit ?: bindings.lastOrNull()?.valueEdit
                     updateActionButtonState()
                 }
+
+                val swipeUpAction = keyData["swipeUp"] as? Map<*, *>
+                val swipeDownAction = keyData["swipeDown"] as? Map<*, *>
+                val swipeLeftAction = keyData["swipeLeft"] as? Map<*, *>
+                val swipeRightAction = keyData["swipeRight"] as? Map<*, *>
+                val longPressAction = keyData["longPress"] as? Map<*, *>
+
+                val swipeUpMacroSteps = (swipeUpAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+                val swipeDownMacroSteps = (swipeDownAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+                val swipeLeftMacroSteps = (swipeLeftAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+                val swipeRightMacroSteps = (swipeRightAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+                val longPressMacroSteps = (longPressAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+
+                macroSwipeUpStepsData = swipeUpMacroSteps
+                macroSwipeDownStepsData = swipeDownMacroSteps
+                macroSwipeLeftStepsData = swipeLeftMacroSteps
+                macroSwipeRightStepsData = swipeRightMacroSteps
+                macroLongPressStepsData = longPressMacroSteps
+
+                val swipeLabel = TextView(this).apply {
+                    text = getString(R.string.key_editor_swipe_longpress_label)
+                    textSize = 14f
+                    setTextColor(styledColor(android.R.attr.colorAccent))
+                    setPadding(0, dp(16), 0, dp(2))
+                }
+                fieldsContainer.addView(swipeLabel)
+
+                val swipeHintLabel = TextView(this).apply {
+                    text = getString(R.string.key_editor_popup_hint)
+                    textSize = 12f
+                    setTextColor(styledColor(android.R.attr.textColorSecondary))
+                    setPadding(0, 0, 0, dp(8))
+                }
+                fieldsContainer.addView(swipeHintLabel)
+
+                val swipePopupContainer = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                }
+
+                // Popup preview label
+                val popupPreviewLabel = TextView(this).apply {
+                    text = getString(R.string.key_editor_popup_preview_label)
+                    textSize = 13f
+                    setTextColor(styledColor(android.R.attr.textColorSecondary))
+                    setPadding(0, dp(8), 0, dp(4))
+                }
+                swipePopupContainer.addView(popupPreviewLabel)
+
+                val swipeUpPopupEdit = uiBuilder.createEditField(
+                    getString(R.string.text_keyboard_layout_key_swipe_up_popup),
+                    keyData["swipeUpPopup"] as? String ?: ""
+                )
+                val swipeDownPopupEdit = uiBuilder.createEditField(
+                    getString(R.string.text_keyboard_layout_key_swipe_down_popup),
+                    keyData["swipeDownPopup"] as? String ?: ""
+                )
+                val swipeLeftPopupEdit = uiBuilder.createEditField(
+                    getString(R.string.text_keyboard_layout_key_swipe_left_popup),
+                    keyData["swipeLeftPopup"] as? String ?: ""
+                )
+                val swipeRightPopupEdit = uiBuilder.createEditField(
+                    getString(R.string.text_keyboard_layout_key_swipe_right_popup),
+                    keyData["swipeRightPopup"] as? String ?: ""
+                )
+                val longPressPopupEdit = uiBuilder.createEditField(
+                    getString(R.string.text_keyboard_layout_key_long_press_popup),
+                    keyData["longPressPopup"] as? String ?: ""
+                )
+
+                alphabetSwipeUpPopupEdit = swipeUpPopupEdit.second
+                alphabetSwipeDownPopupEdit = swipeDownPopupEdit.second
+                alphabetSwipeLeftPopupEdit = swipeLeftPopupEdit.second
+                alphabetSwipeRightPopupEdit = swipeRightPopupEdit.second
+                alphabetLongPressPopupEdit = longPressPopupEdit.second
+
+                // Create per-direction popup enabled switches
+                fun createPopupEnabledRow(label: String, enabled: Boolean): Pair<LinearLayout, SwitchCompat> {
+                    val row = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(0, dp(2), 0, dp(2))
+                    }
+                    val labelView = TextView(this).apply {
+                        text = label
+                        textSize = 13f
+                        setTextColor(styledColor(android.R.attr.textColorSecondary))
+                        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    }
+                    val switch = SwitchCompat(this).apply {
+                        isChecked = enabled
+                        textSize = 13f
+                    }
+                    row.addView(labelView)
+                    row.addView(switch)
+                    return row to switch
+                }
+
+                val swipeUpPopupEnabled = createPopupEnabledRow(
+                    getString(R.string.key_editor_swipe_up_hint), keyData["swipeUpPopupEnabled"] as? Boolean ?: true
+                )
+                val swipeDownPopupEnabled = createPopupEnabledRow(
+                    getString(R.string.key_editor_swipe_down_hint), keyData["swipeDownPopupEnabled"] as? Boolean ?: true
+                )
+                val swipeLeftPopupEnabled = createPopupEnabledRow(
+                    getString(R.string.key_editor_swipe_left_hint), keyData["swipeLeftPopupEnabled"] as? Boolean ?: true
+                )
+                val swipeRightPopupEnabled = createPopupEnabledRow(
+                    getString(R.string.key_editor_swipe_right_hint), keyData["swipeRightPopupEnabled"] as? Boolean ?: true
+                )
+                val longPressPopupEnabled = createPopupEnabledRow(
+                    getString(R.string.key_editor_longpress_hint), keyData["longPressPopupEnabled"] as? Boolean ?: true
+                )
+
+                alphabetSwipeUpPopupEnabledSwitch = swipeUpPopupEnabled.second
+                alphabetSwipeDownPopupEnabledSwitch = swipeDownPopupEnabled.second
+                alphabetSwipeLeftPopupEnabledSwitch = swipeLeftPopupEnabled.second
+                alphabetSwipeRightPopupEnabledSwitch = swipeRightPopupEnabled.second
+                alphabetLongPressPopupEnabledSwitch = longPressPopupEnabled.second
+
+                swipePopupContainer.addView(swipeUpPopupEdit.first)
+                swipePopupContainer.addView(swipeUpPopupEnabled.first)
+                swipePopupContainer.addView(swipeDownPopupEdit.first)
+                swipePopupContainer.addView(swipeDownPopupEnabled.first)
+                swipePopupContainer.addView(swipeLeftPopupEdit.first)
+                swipePopupContainer.addView(swipeLeftPopupEnabled.first)
+                swipePopupContainer.addView(swipeRightPopupEdit.first)
+                swipePopupContainer.addView(swipeRightPopupEnabled.first)
+                swipePopupContainer.addView(longPressPopupEdit.first)
+                swipePopupContainer.addView(longPressPopupEnabled.first)
+                fieldsContainer.addView(swipePopupContainer)
+
+                val swipeGridLayout = android.widget.TableLayout(this).apply {
+                    isStretchAllColumns = true
+                    isShrinkAllColumns = true
+                }
+
+                val swipeEvents = listOf(
+                    Triple(getString(R.string.key_editor_swipe_up_btn), macroSwipeUpStepsData, swipeUpMacroSteps),
+                    Triple(getString(R.string.key_editor_swipe_down_btn), macroSwipeDownStepsData, swipeDownMacroSteps),
+                    Triple(getString(R.string.key_editor_swipe_left_btn), macroSwipeLeftStepsData, swipeLeftMacroSteps),
+                    Triple(getString(R.string.key_editor_swipe_right_btn), macroSwipeRightStepsData, swipeRightMacroSteps),
+                    Triple(getString(R.string.key_editor_longpress_btn), macroLongPressStepsData, longPressMacroSteps)
+                )
+
+                val rowCount = (swipeEvents.size + 1) / 2
+                for (row in 0 until rowCount) {
+                    val tableRow = android.widget.TableRow(this).apply {
+                        layoutParams = android.widget.TableRow.LayoutParams(
+                            android.widget.TableRow.LayoutParams.MATCH_PARENT,
+                            android.widget.TableRow.LayoutParams.WRAP_CONTENT
+                        ).apply {
+                            bottomMargin = dp(4)
+                        }
+                    }
+
+                    for (col in 0 until 2) {
+                        val index = row * 2 + col
+                        if (index < swipeEvents.size) {
+                            val (title, stepsData, macroSteps) = swipeEvents[index]
+                            val cellView = createCompactMacroButton(title, stepsData) {
+                                val eventTitle = when (index) {
+                                    0 -> getString(R.string.key_editor_swipe_up_event)
+                                    1 -> getString(R.string.key_editor_swipe_down_event)
+                                    2 -> getString(R.string.key_editor_swipe_left_event)
+                                    3 -> getString(R.string.key_editor_swipe_right_event)
+                                    else -> getString(R.string.key_editor_longpress_event)
+                                }
+                                openMacroEditor(stepsData, eventTitle) { newSteps ->
+                                    val draft = buildDraftKeyData()
+                                    when (index) {
+                                        0 -> { macroSwipeUpStepsData = newSteps; draft["swipeUp"] = mapOf("macro" to newSteps) }
+                                        1 -> { macroSwipeDownStepsData = newSteps; draft["swipeDown"] = mapOf("macro" to newSteps) }
+                                        2 -> { macroSwipeLeftStepsData = newSteps; draft["swipeLeft"] = mapOf("macro" to newSteps) }
+                                        3 -> { macroSwipeRightStepsData = newSteps; draft["swipeRight"] = mapOf("macro" to newSteps) }
+                                        4 -> { macroLongPressStepsData = newSteps; draft["longPress"] = mapOf("macro" to newSteps) }
+                                    }
+                                    keyData = draft
+                                    rebuildFields()
+                                    updateActionButtonState()
+                                }
+                            }
+                            tableRow.addView(cellView)
+                        } else {
+                            val emptyView = android.view.View(this).apply {
+                                layoutParams = android.widget.TableRow.LayoutParams(
+                                    0,
+                                    android.widget.TableRow.LayoutParams.WRAP_CONTENT,
+                                    1f
+                                )
+                            }
+                            tableRow.addView(emptyView)
+                        }
+                    }
+                    swipeGridLayout.addView(tableRow)
+                }
+                fieldsContainer.addView(swipeGridLayout)
             }
 
             "LayoutSwitchKey" -> {
@@ -461,15 +697,12 @@ class KeyEditorActivity : AppCompatActivity() {
 
                 val tapAction = keyData["tap"] as? Map<*, *>
                 val swipeAction = keyData["swipe"] as? Map<*, *>
-                val longPressAction = keyData["longPress"] as? Map<*, *>
 
-                val tapMacroSteps = (tapAction?.get("macro") as? List<*>)?.filterNotNull() ?: emptyList()
-                val swipeMacroSteps = (swipeAction?.get("macro") as? List<*>)?.filterNotNull() ?: emptyList()
-                val longPressMacroSteps = (longPressAction?.get("macro") as? List<*>)?.filterNotNull() ?: emptyList()
+                val tapMacroSteps = (tapAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+                val swipeMacroSteps = (swipeAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
 
                 macroTapStepsData = tapMacroSteps
                 macroSwipeStepsData = swipeMacroSteps
-                macroLongPressStepsData = longPressMacroSteps
 
                 createMacroEditorButton(
                     title = getString(R.string.text_keyboard_layout_macro_tap_event),
@@ -501,23 +734,9 @@ class KeyEditorActivity : AppCompatActivity() {
                     }
                 ).forEach { fieldsContainer.addView(it) }
 
-                createMacroEditorButton(
-                    title = getString(R.string.text_keyboard_layout_macro_longpress_event),
-                    previewText = buildMacroPreview(longPressMacroSteps),
-                    onClick = {
-                        openMacroEditor(macroLongPressStepsData, getString(R.string.text_keyboard_layout_macro_longpress_event)) { newSteps ->
-                            val draft = buildDraftKeyData()
-                            macroLongPressStepsData = newSteps
-                            draft["longPress"] = mapOf("macro" to newSteps)
-                            keyData = draft
-                            rebuildFields()
-                            updateActionButtonState()
-                        }
-                    }
-                ).forEach { fieldsContainer.addView(it) }
             }
 
-            "CapsKey", "CommaKey", "LanguageKey", "SpaceKey", "ReturnKey", "BackspaceKey" -> {
+            "CapsKey", "CommaKey", "LanguageKey", "ReturnKey" -> {
                 val weightEdit = uiBuilder.createEditField(
                     getString(R.string.text_keyboard_layout_key_weight),
                     (keyData["weight"] as? Number)?.toString() ?: ""
@@ -525,6 +744,112 @@ class KeyEditorActivity : AppCompatActivity() {
                 simpleWeightEdit = weightEdit.second
                 fieldsContainer.addView(weightEdit.first)
             }
+
+            "BackspaceKey", "SpaceKey" -> {
+                val weightEdit = uiBuilder.createEditField(
+                    getString(R.string.text_keyboard_layout_key_weight),
+                    (keyData["weight"] as? Number)?.toString() ?: ""
+                )
+                simpleWeightEdit = weightEdit.second
+                fieldsContainer.addView(weightEdit.first)
+            }
+        }
+
+        val swipeKeysExcludingAlphabet = setOf(
+            "CapsKey", "CommaKey", "LanguageKey", "SymbolKey", "LayoutSwitchKey", "SpaceKey", "BackspaceKey"
+        )
+        if (selectedType in swipeKeysExcludingAlphabet || selectedType == "MacroKey") {
+            val swipeUpAction = keyData["swipeUp"] as? Map<*, *>
+            val swipeDownAction = keyData["swipeDown"] as? Map<*, *>
+            val swipeLeftAction = keyData["swipeLeft"] as? Map<*, *>
+            val swipeRightAction = keyData["swipeRight"] as? Map<*, *>
+            val longPressAction = keyData["longPress"] as? Map<*, *>
+
+            val swipeUpMacroSteps = (swipeUpAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+            val swipeDownMacroSteps = (swipeDownAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+            val swipeLeftMacroSteps = (swipeLeftAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+            val swipeRightMacroSteps = (swipeRightAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+            val longPressMacroSteps = (longPressAction?.get("macro") as? List<*>)?.filterIsInstance<Map<*, *>>() ?: emptyList()
+
+            macroSwipeUpStepsData = swipeUpMacroSteps
+            macroSwipeDownStepsData = swipeDownMacroSteps
+            macroSwipeLeftStepsData = swipeLeftMacroSteps
+            macroSwipeRightStepsData = swipeRightMacroSteps
+            macroLongPressStepsData = longPressMacroSteps
+
+            val customLabel = TextView(this).apply {
+                text = getString(R.string.key_editor_custom_behavior_label)
+                textSize = 14f
+                setTextColor(styledColor(android.R.attr.colorAccent))
+                setPadding(0, dp(16), 0, dp(8))
+            }
+            fieldsContainer.addView(customLabel)
+
+            val swipeGridLayout = android.widget.TableLayout(this).apply {
+                isStretchAllColumns = true
+                isShrinkAllColumns = true
+            }
+
+            val swipeEvents = listOf(
+                Triple(getString(R.string.key_editor_swipe_up_btn), macroSwipeUpStepsData, swipeUpMacroSteps),
+                Triple(getString(R.string.key_editor_swipe_down_btn), macroSwipeDownStepsData, swipeDownMacroSteps),
+                Triple(getString(R.string.key_editor_swipe_left_btn), macroSwipeLeftStepsData, swipeLeftMacroSteps),
+                Triple(getString(R.string.key_editor_swipe_right_btn), macroSwipeRightStepsData, swipeRightMacroSteps),
+                Triple(getString(R.string.key_editor_longpress_btn), macroLongPressStepsData, longPressMacroSteps)
+            )
+
+            val rowCount = (swipeEvents.size + 1) / 2
+            for (row in 0 until rowCount) {
+                val tableRow = android.widget.TableRow(this).apply {
+                    layoutParams = android.widget.TableRow.LayoutParams(
+                        android.widget.TableRow.LayoutParams.MATCH_PARENT,
+                        android.widget.TableRow.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        bottomMargin = dp(4)
+                    }
+                }
+
+                for (col in 0 until 2) {
+                    val index = row * 2 + col
+                    if (index < swipeEvents.size) {
+                        val (title, stepsData, macroSteps) = swipeEvents[index]
+                        val cellView = createCompactMacroButton(title, stepsData) {
+                            val eventTitle = when (index) {
+                                0 -> getString(R.string.key_editor_swipe_up_event)
+                                1 -> getString(R.string.key_editor_swipe_down_event)
+                                2 -> getString(R.string.key_editor_swipe_left_event)
+                                3 -> getString(R.string.key_editor_swipe_right_event)
+                                else -> getString(R.string.key_editor_longpress_event)
+                            }
+                            openMacroEditor(stepsData, eventTitle) { newSteps ->
+                                val draft = buildDraftKeyData()
+                                when (index) {
+                                    0 -> { macroSwipeUpStepsData = newSteps; draft["swipeUp"] = mapOf("macro" to newSteps) }
+                                    1 -> { macroSwipeDownStepsData = newSteps; draft["swipeDown"] = mapOf("macro" to newSteps) }
+                                    2 -> { macroSwipeLeftStepsData = newSteps; draft["swipeLeft"] = mapOf("macro" to newSteps) }
+                                    3 -> { macroSwipeRightStepsData = newSteps; draft["swipeRight"] = mapOf("macro" to newSteps) }
+                                    4 -> { macroLongPressStepsData = newSteps; draft["longPress"] = mapOf("macro" to newSteps) }
+                                }
+                                keyData = draft
+                                rebuildFields()
+                                updateActionButtonState()
+                            }
+                        }
+                        tableRow.addView(cellView)
+                    } else {
+                        val emptyView = android.view.View(this).apply {
+                            layoutParams = android.widget.TableRow.LayoutParams(
+                                0,
+                                android.widget.TableRow.LayoutParams.WRAP_CONTENT,
+                                1f
+                            )
+                        }
+                        tableRow.addView(emptyView)
+                    }
+                }
+                swipeGridLayout.addView(tableRow)
+            }
+            fieldsContainer.addView(swipeGridLayout)
         }
 
         renderColorEditors()
@@ -755,8 +1080,10 @@ class KeyEditorActivity : AppCompatActivity() {
             "AlphabetKey" -> {
                 val main = alphabetMainEdit?.text?.toString().orEmpty()
                 val alt = alphabetAltEdit?.text?.toString().orEmpty()
+                val hint = alphabetHintTextEdit?.text?.toString().orEmpty()
                 if (main.isNotEmpty()) draft["main"] = main
                 if (alt.isNotEmpty()) draft["alt"] = alt
+                if (hint.isNotEmpty()) draft["hint"] = hint
                 parseWeight(alphabetWeightEdit?.text?.toString())?.let { draft["weight"] = it }
 
                 if (alphabetDisplayTextModeSpecific) {
@@ -778,6 +1105,28 @@ class KeyEditorActivity : AppCompatActivity() {
                         draft["displayText"] = displayText
                     }
                 }
+
+                if (macroSwipeUpStepsData.isNotEmpty()) draft["swipeUp"] = mapOf("macro" to macroSwipeUpStepsData)
+                if (macroSwipeDownStepsData.isNotEmpty()) draft["swipeDown"] = mapOf("macro" to macroSwipeDownStepsData)
+                if (macroSwipeLeftStepsData.isNotEmpty()) draft["swipeLeft"] = mapOf("macro" to macroSwipeLeftStepsData)
+                if (macroSwipeRightStepsData.isNotEmpty()) draft["swipeRight"] = mapOf("macro" to macroSwipeRightStepsData)
+                if (macroLongPressStepsData.isNotEmpty()) draft["longPress"] = mapOf("macro" to macroLongPressStepsData)
+
+                val swipeUpPopup = alphabetSwipeUpPopupEdit?.text?.toString().orEmpty()
+                val swipeDownPopup = alphabetSwipeDownPopupEdit?.text?.toString().orEmpty()
+                val swipeLeftPopup = alphabetSwipeLeftPopupEdit?.text?.toString().orEmpty()
+                val swipeRightPopup = alphabetSwipeRightPopupEdit?.text?.toString().orEmpty()
+                val longPressPopup = alphabetLongPressPopupEdit?.text?.toString().orEmpty()
+                if (swipeUpPopup.isNotEmpty()) draft["swipeUpPopup"] = swipeUpPopup
+                if (swipeDownPopup.isNotEmpty()) draft["swipeDownPopup"] = swipeDownPopup
+                if (swipeLeftPopup.isNotEmpty()) draft["swipeLeftPopup"] = swipeLeftPopup
+                if (swipeRightPopup.isNotEmpty()) draft["swipeRightPopup"] = swipeRightPopup
+                if (longPressPopup.isNotEmpty()) draft["longPressPopup"] = longPressPopup
+                draft["swipeUpPopupEnabled"] = alphabetSwipeUpPopupEnabledSwitch?.isChecked ?: true
+                draft["swipeDownPopupEnabled"] = alphabetSwipeDownPopupEnabledSwitch?.isChecked ?: true
+                draft["swipeLeftPopupEnabled"] = alphabetSwipeLeftPopupEnabledSwitch?.isChecked ?: true
+                draft["swipeRightPopupEnabled"] = alphabetSwipeRightPopupEnabledSwitch?.isChecked ?: true
+                draft["longPressPopupEnabled"] = alphabetLongPressPopupEnabledSwitch?.isChecked ?: true
             }
 
             "LayoutSwitchKey" -> {
@@ -831,14 +1180,37 @@ class KeyEditorActivity : AppCompatActivity() {
                     draft["swipe"] = mapOf("macro" to macroSwipeStepsData)
                 }
 
-                if (macroLongPressStepsData.isNotEmpty()) {
-                    draft["longPress"] = mapOf("macro" to macroLongPressStepsData)
-                }
             }
+        }
 
-            "CapsKey", "CommaKey", "LanguageKey", "SpaceKey", "ReturnKey", "BackspaceKey" -> {
-                parseWeight(simpleWeightEdit?.text?.toString())?.let { draft["weight"] = it }
-            }
+        if (macroSwipeUpStepsData.isNotEmpty()) {
+            draft["swipeUp"] = mapOf("macro" to macroSwipeUpStepsData)
+        } else {
+            draft["swipeUp"] = null
+        }
+        if (macroSwipeDownStepsData.isNotEmpty()) {
+            draft["swipeDown"] = mapOf("macro" to macroSwipeDownStepsData)
+        } else {
+            draft["swipeDown"] = null
+        }
+        if (macroSwipeLeftStepsData.isNotEmpty()) {
+            draft["swipeLeft"] = mapOf("macro" to macroSwipeLeftStepsData)
+        } else {
+            draft["swipeLeft"] = null
+        }
+        if (macroSwipeRightStepsData.isNotEmpty()) {
+            draft["swipeRight"] = mapOf("macro" to macroSwipeRightStepsData)
+        } else {
+            draft["swipeRight"] = null
+        }
+        if (macroLongPressStepsData.isNotEmpty()) {
+            draft["longPress"] = mapOf("macro" to macroLongPressStepsData)
+        } else {
+            draft["longPress"] = null
+        }
+
+        if (selectedType in listOf("CapsKey", "CommaKey", "LanguageKey", "SpaceKey", "ReturnKey", "BackspaceKey")) {
+            parseWeight(simpleWeightEdit?.text?.toString())?.let { draft["weight"] = it }
         }
 
         appendColorOverrides(draft)
@@ -910,10 +1282,53 @@ class KeyEditorActivity : AppCompatActivity() {
         return listOf(button, preview)
     }
 
+    private fun createCompactMacroButton(
+        title: String,
+        macroSteps: List<Map<*, *>>,
+        onClick: () -> Unit
+    ): android.view.View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(styledColor(android.R.attr.colorButtonNormal))
+                setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                cornerRadius = dp(4).toFloat()
+            }
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            layoutParams = android.widget.TableRow.LayoutParams(
+                0,
+                android.widget.TableRow.LayoutParams.WRAP_CONTENT,
+                1f
+            ).apply {
+                marginEnd = dp(4)
+                bottomMargin = dp(4)
+            }
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+
+            addView(TextView(context).apply {
+                text = title
+                textSize = 12f
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                gravity = Gravity.CENTER
+            })
+
+            addView(TextView(context).apply {
+                text = buildMacroPreview(macroSteps)
+                textSize = 10f
+                setTextColor(styledColor(android.R.attr.textColorSecondary))
+                gravity = Gravity.CENTER
+                maxLines = 1
+            })
+        }
+    }
+
     private fun openMacroEditor(
-        initialSteps: List<*>,
+        initialSteps: List<Map<*, *>>,
         eventType: String,
-        callback: (List<Any>) -> Unit
+        callback: (List<Map<*, *>>) -> Unit
     ) {
         val intent = Intent(this, MacroEditorActivity::class.java)
         if (initialSteps.isNotEmpty()) {
@@ -1006,6 +1421,17 @@ class KeyEditorActivity : AppCompatActivity() {
             macroWeightEdit,
             simpleWeightEdit
         ) ?: return
+
+        result.remove("__global_backspaceSwipeDeleteAll")
+        result.remove("__global_spaceSwipeMoveCursor")
+        result.remove("__global_spaceSwipeUpBehavior")
+        result.remove("__global_spaceLongPressBehavior")
+        
+        val kbdPrefs = org.fcitx.fcitx5.android.data.prefs.AppPrefs.getInstance().keyboard
+        pendingBackspaceSwipeDeleteAll?.let { kbdPrefs.backspaceSwipeDeleteAll.setValue(it) }
+        pendingSpaceSwipeMoveCursor?.let { kbdPrefs.spaceSwipeMoveCursor.setValue(it) }
+        pendingSpaceSwipeUpBehavior?.let { kbdPrefs.spaceSwipeUpBehavior.setValue(it) }
+        pendingSpaceLongPressBehavior?.let { kbdPrefs.spaceKeyLongPressBehavior.setValue(it) }
 
         val data = Intent().apply {
             putExtra(EXTRA_RESULT_ACTION, RESULT_ACTION_SAVE)
@@ -1140,7 +1566,25 @@ class KeyEditorActivity : AppCompatActivity() {
             "AlphabetKey" -> {
                 newKey["main"] = alphabetMainEdit?.text?.toString().orEmpty()
                 newKey["alt"] = alphabetAltEdit?.text?.toString().orEmpty()
+                val hint = alphabetHintTextEdit?.text?.toString().orEmpty()
+                if (hint.isNotEmpty()) newKey["hint"] = hint
                 parseWeight(alphabetWeightEdit?.text?.toString())?.let { newKey["weight"] = it }
+
+                val swipeUpPopup = alphabetSwipeUpPopupEdit?.text?.toString().orEmpty()
+                val swipeDownPopup = alphabetSwipeDownPopupEdit?.text?.toString().orEmpty()
+                val swipeLeftPopup = alphabetSwipeLeftPopupEdit?.text?.toString().orEmpty()
+                val swipeRightPopup = alphabetSwipeRightPopupEdit?.text?.toString().orEmpty()
+                val longPressPopup = alphabetLongPressPopupEdit?.text?.toString().orEmpty()
+                if (swipeUpPopup.isNotEmpty()) newKey["swipeUpPopup"] = swipeUpPopup
+                if (swipeDownPopup.isNotEmpty()) newKey["swipeDownPopup"] = swipeDownPopup
+                if (swipeLeftPopup.isNotEmpty()) newKey["swipeLeftPopup"] = swipeLeftPopup
+                if (swipeRightPopup.isNotEmpty()) newKey["swipeRightPopup"] = swipeRightPopup
+                if (longPressPopup.isNotEmpty()) newKey["longPressPopup"] = longPressPopup
+                newKey["swipeUpPopupEnabled"] = alphabetSwipeUpPopupEnabledSwitch?.isChecked ?: true
+                newKey["swipeDownPopupEnabled"] = alphabetSwipeDownPopupEnabledSwitch?.isChecked ?: true
+                newKey["swipeLeftPopupEnabled"] = alphabetSwipeLeftPopupEnabledSwitch?.isChecked ?: true
+                newKey["swipeRightPopupEnabled"] = alphabetSwipeRightPopupEnabledSwitch?.isChecked ?: true
+                newKey["longPressPopupEnabled"] = alphabetLongPressPopupEnabledSwitch?.isChecked ?: true
 
                 if (alphabetDisplayTextModeSpecific) {
                     val displayTextMap = mutableMapOf<String, String>()
@@ -1218,14 +1662,27 @@ class KeyEditorActivity : AppCompatActivity() {
                     newKey["swipe"] = mapOf("macro" to macroSwipeStepsData)
                 }
 
-                if (macroLongPressStepsData.isNotEmpty()) {
-                    newKey["longPress"] = mapOf("macro" to macroLongPressStepsData)
-                }
             }
+        }
 
-            "CapsKey", "CommaKey", "LanguageKey", "SpaceKey", "ReturnKey", "BackspaceKey" -> {
-                parseWeight(simpleWeightEdit?.text?.toString())?.let { newKey["weight"] = it }
-            }
+        if (macroSwipeUpStepsData.isNotEmpty()) {
+            newKey["swipeUp"] = mapOf("macro" to macroSwipeUpStepsData)
+        }
+        if (macroSwipeDownStepsData.isNotEmpty()) {
+            newKey["swipeDown"] = mapOf("macro" to macroSwipeDownStepsData)
+        }
+        if (macroSwipeLeftStepsData.isNotEmpty()) {
+            newKey["swipeLeft"] = mapOf("macro" to macroSwipeLeftStepsData)
+        }
+        if (macroSwipeRightStepsData.isNotEmpty()) {
+            newKey["swipeRight"] = mapOf("macro" to macroSwipeRightStepsData)
+        }
+        if (macroLongPressStepsData.isNotEmpty()) {
+            newKey["longPress"] = mapOf("macro" to macroLongPressStepsData)
+        }
+
+        if (selectedType in listOf("CapsKey", "CommaKey", "LanguageKey", "SpaceKey", "ReturnKey", "BackspaceKey")) {
+            parseWeight(simpleWeightEdit?.text?.toString())?.let { newKey["weight"] = it }
         }
 
         appendColorOverrides(newKey)

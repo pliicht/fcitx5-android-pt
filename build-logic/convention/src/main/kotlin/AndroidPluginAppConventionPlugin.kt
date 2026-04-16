@@ -48,6 +48,9 @@ class AndroidPluginAppConventionPlugin : Plugin<Project> {
             }
         }
         target.extensions.configure<ApplicationAndroidComponentsExtension> {
+            beforeVariants { variantBuilder ->
+                variantBuilder.enableAndroidTest = false
+            }
             onVariants { variant ->
                 val variantName = variant.name.capitalized()
                 target.afterEvaluate {

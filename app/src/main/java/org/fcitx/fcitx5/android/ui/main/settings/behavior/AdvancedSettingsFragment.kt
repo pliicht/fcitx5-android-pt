@@ -118,6 +118,11 @@ class AdvancedSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
     override fun onPreferenceUiCreated(screen: PreferenceScreen) {
         val ctx = requireContext()
 
+        // Hide appLanguage from Advanced settings (it's only accessible from MainFragment)
+        screen.findPreference<Preference>(AppPrefs.getInstance().advanced.appLanguage.key)?.let {
+            screen.removePreference(it)
+        }
+
         // Set up click listener for allowed plugin prefixes
         allowedPrefixesPreference =
             screen.findPreference(AppPrefs.getInstance().advanced.allowedPluginPrefixes.key)

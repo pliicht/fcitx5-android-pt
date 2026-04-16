@@ -20,6 +20,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.plus
 import org.fcitx.fcitx5.android.daemon.FcitxDaemon
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
+import org.fcitx.fcitx5.android.data.prefs.AppLanguage
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.SmartDefaultInitializer
 import org.fcitx.fcitx5.android.data.prefs.SplitKeyboardStateManager
@@ -31,6 +32,7 @@ import org.fcitx.fcitx5.android.utils.setupForest
 import org.fcitx.fcitx5.android.utils.startActivity
 import org.fcitx.fcitx5.android.utils.userManager
 import timber.log.Timber
+import java.util.Locale
 import kotlin.system.exitProcess
 
 class FcitxApplication : Application() {
@@ -74,6 +76,37 @@ class FcitxApplication : Application() {
 
     var isDirectBootMode = false
         private set
+
+    override fun attachBaseContext(base: Context) {
+        val ctx = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // On Android 13+, Per-app Language API (LocaleManager) handles locale automatically
+            // when generateLocaleConfig is enabled in build.gradle.kts
+            base
+        } else {
+            // On older versions, manually apply locale from SharedPreferences
+            val prefs = PreferenceManager.getDefaultSharedPreferences(base)
+            val raw = prefs.getString("app_language", null)
+            val language = try {
+                if (raw != null) AppLanguage.valueOf(raw) else AppLanguage.System
+            } catch (_: IllegalArgumentException) {
+                AppLanguage.System
+            }
+            if (language.tag != null) {
+                val locale = if (language.tag.contains("-")) {
+                    val parts = language.tag.split("-")
+                    Locale(parts[0], parts[1])
+                } else {
+                    Locale(language.tag)
+                }
+                val config = Configuration(base.resources.configuration)
+                config.setLocale(locale)
+                base.createConfigurationContext(config)
+            } else {
+                base
+            }
+        }
+        super.attachBaseContext(ctx)
+    }
 
     val directBootAwareContext: Context
         get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isDirectBootMode) {

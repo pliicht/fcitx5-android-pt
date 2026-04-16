@@ -29,6 +29,7 @@ import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.data.theme.ThemePrefs.PunctuationPosition
+import org.fcitx.fcitx5.android.data.theme.ThemePrefs.HintTextPosition
 import org.fcitx.fcitx5.android.input.AutoScaleTextView
 import org.fcitx.fcitx5.android.input.keyboard.KeyDef.Appearance.Border
 import org.fcitx.fcitx5.android.input.keyboard.KeyDef.Appearance.Variant
@@ -451,9 +452,34 @@ class AltTextKeyView(
         )
     }
 
+    // Hint text view - shows custom hint text below main character
+    private val hintTextView = if (def.hintText != null) view(::AutoScaleTextView) {
+        isClickable = false
+        isFocusable = false
+        scaleMode = AutoScaleTextView.Mode.Proportional
+        gravity = Gravity.CENTER
+        setPadding(hMargin, 0, hMargin, 0)
+        val hintSize = org.fcitx.fcitx5.android.input.font.FontProviders.getFontSize(
+            "key_alt_font", 9f
+        )
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, hintSize)
+        fontKey = "key_alt_font"
+        text = def.hintText
+        textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
+        setTextColor(
+            resolveAltTextColor(
+                when (def.variant) {
+                    Variant.Normal, Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
+                    Variant.Accent -> theme.accentKeyTextColor
+                }
+            )
+        )
+    } else null
+
     init {
         appearanceView.apply {
             add(altText, lParams(0, wrapContent))
+            hintTextView?.let { add(it, lParams(0, wrapContent)) }
         }
         applyLayout(resources.configuration.orientation)
     }
@@ -462,18 +488,31 @@ class AltTextKeyView(
         super.setTextScale(scale)
         altText.setTextSize(TypedValue.COMPLEX_UNIT_SP, baseAltTextSizeSp * scale)
         altText.requestLayout()
+        hintTextView?.let {
+            val hintSize = org.fcitx.fcitx5.android.input.font.FontProviders.getFontSize(
+                "key_alt_font", 9f
+            )
+            it.setTextSize(TypedValue.COMPLEX_UNIT_SP, hintSize * scale)
+            it.requestLayout()
+        }
         lastLayoutMode = null
         applyLayout(resources.configuration.orientation)
     }
 
+    private fun isHintTextVisible(): Boolean {
+        return hintTextView != null && ThemeManager.prefs.hintTextPosition.getValue() != HintTextPosition.None
+    }
+
     private fun applyTopRightAltTextPosition() {
+        // mainText centered vertically, hintText below it
         mainText.updateLayoutParams<ConstraintLayout.LayoutParams> {
             // reset
             topMargin = 0
             bottomToTop = unset
-            // set
+            // set: vertically centered
             topToTop = parentId
             bottomToBottom = parentId
+            verticalBias = 0.45f  // slightly above center to leave room for hintText below
         }
         altText.visibility = View.VISIBLE
         altText.updateLayoutParams<ConstraintLayout.LayoutParams> {
@@ -486,32 +525,94 @@ class AltTextKeyView(
             rightToRight = parentId; rightMargin = hMargin
         }
         altText.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+        // Hint text below main text when visible
+        if (isHintTextVisible()) {
+            hintTextView?.apply {
+                visibility = View.VISIBLE
+                updateLayoutParams<ConstraintLayout.LayoutParams> {
+                    width = 0
+                    // reset
+                    topToTop = unset; topMargin = 0
+                    // set
+                    leftToLeft = parentId; leftMargin = hMargin
+                    rightToRight = parentId; rightMargin = hMargin
+                    topToBottom = mainText.existingOrNewId
+                    bottomToBottom = parentId; bottomMargin = vMargin + dp(2)
+                }
+                gravity = Gravity.CENTER
+            }
+        } else {
+            hintTextView?.visibility = View.GONE
+        }
     }
 
     private fun applyBottomAltTextPosition() {
+        val showHint = isHintTextVisible()
+
+        // mainText vertically centered, hintText below mainText, altText at bottom
         mainText.updateLayoutParams<ConstraintLayout.LayoutParams> {
             // reset
-            bottomToBottom = unset
-            // set
-            topToTop = parentId; topMargin = vMargin
-            bottomToTop = altText.existingOrNewId
+            bottomToTop = unset
+            topMargin = 0
+            // set: vertically centered with bias
+            topToTop = parentId
+            bottomToBottom = parentId
+            verticalBias = 0.4f  // slightly above center to leave room for hintText and altText below
         }
-        altText.visibility = View.VISIBLE
-        altText.updateLayoutParams<ConstraintLayout.LayoutParams> {
-            // reset
-            width = 0
-            topToTop = unset; topMargin = 0
-            leftMargin = hMargin
-            rightMargin = hMargin
-            // set
-            leftToLeft = parentId
-            rightToRight = parentId
-            bottomToBottom = parentId; bottomMargin = vMargin + dp(2)
+
+        if (showHint) {
+            // Chain: mainText → hintText → altText
+            hintTextView?.apply {
+                visibility = View.VISIBLE
+                updateLayoutParams<ConstraintLayout.LayoutParams> {
+                    width = 0
+                    // reset
+                    topToTop = unset; topMargin = 0
+                    // set
+                    leftMargin = hMargin
+                    rightMargin = hMargin
+                    topToBottom = mainText.existingOrNewId
+                    bottomToTop = altText.existingOrNewId
+                    leftToLeft = parentId
+                    rightToRight = parentId
+                }
+                gravity = Gravity.CENTER
+            }
+            altText.visibility = View.VISIBLE
+            altText.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                width = 0
+                // reset
+                topToTop = unset; topMargin = 0
+                // set
+                leftMargin = hMargin
+                rightMargin = hMargin
+                leftToLeft = parentId
+                rightToRight = parentId
+                bottomToBottom = parentId; bottomMargin = vMargin + dp(2)
+            }
+            altText.gravity = Gravity.CENTER
+        } else {
+            // Chain: mainText → altText
+            altText.visibility = View.VISIBLE
+            altText.updateLayoutParams<ConstraintLayout.LayoutParams> {
+                width = 0
+                // reset
+                topToTop = unset; topMargin = 0
+                // set
+                leftMargin = hMargin
+                rightMargin = hMargin
+                leftToLeft = parentId
+                rightToRight = parentId
+                topToBottom = mainText.existingOrNewId
+                bottomToBottom = parentId; bottomMargin = vMargin + dp(2)
+            }
+            altText.gravity = Gravity.CENTER
+            hintTextView?.visibility = View.GONE
         }
-        altText.gravity = Gravity.CENTER
     }
 
     private fun applyNoAltTextPosition() {
+        // mainText centered vertically, hintText below it
         mainText.updateLayoutParams<ConstraintLayout.LayoutParams> {
             // reset
             topMargin = 0
@@ -519,9 +620,29 @@ class AltTextKeyView(
             // set
             topToTop = parentId
             bottomToBottom = parentId
+            verticalBias = 0.45f  // slightly above center to leave room for hintText below
         }
         altText.visibility = View.GONE
         altText.gravity = Gravity.CENTER
+        // Hint text below main text when visible
+        if (isHintTextVisible()) {
+            hintTextView?.apply {
+                visibility = View.VISIBLE
+                updateLayoutParams<ConstraintLayout.LayoutParams> {
+                    width = 0
+                    // reset
+                    topToTop = unset; topMargin = 0
+                    // set
+                    leftToLeft = parentId; leftMargin = hMargin
+                    rightToRight = parentId; rightMargin = hMargin
+                    topToBottom = mainText.existingOrNewId
+                    bottomToBottom = parentId; bottomMargin = vMargin + dp(2)
+                }
+                gravity = Gravity.CENTER
+            }
+        } else {
+            hintTextView?.visibility = View.GONE
+        }
     }
 
     private fun resolveLayoutMode(orientation: Int, keyHeight: Int): AltTextLayoutMode {
@@ -541,8 +662,9 @@ class AltTextKeyView(
         val contentHeight = keyHeight - vMargin * 2
         val mainHeight = mainText.paint.run { fontMetrics.bottom - fontMetrics.top }
         val altHeight = altText.paint.run { fontMetrics.bottom - fontMetrics.top }
+        val hintHeight = if (isHintTextVisible()) hintTextView?.paint?.run { fontMetrics.bottom - fontMetrics.top } ?: 0f else 0f
         val compactMinHeight = max(mainHeight, altHeight + dp(4))
-        val stackedMinHeight = mainHeight + altHeight + dp(6)
+        val stackedMinHeight = mainHeight + altHeight + hintHeight + dp(6)
 
         return when (preferred) {
             AltTextLayoutMode.Bottom -> when {
@@ -581,6 +703,14 @@ class AltTextKeyView(
     override fun updateTheme(newTheme: Theme) {
         super.updateTheme(newTheme)
         altText.setTextColor(
+            resolveAltTextColor(
+                when (def.variant) {
+                    Variant.Normal, Variant.AltForeground, Variant.Alternative -> newTheme.altKeyTextColor
+                    Variant.Accent -> newTheme.accentKeyTextColor
+                }
+            )
+        )
+        hintTextView?.setTextColor(
             resolveAltTextColor(
                 when (def.variant) {
                     Variant.Normal, Variant.AltForeground, Variant.Alternative -> newTheme.altKeyTextColor

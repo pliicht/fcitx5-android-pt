@@ -184,13 +184,14 @@ class LayoutDataManager(private val context: Context) {
      * 加载默认预设布局
      */
     private fun loadDefaultPreset(): Map<String, List<List<Map<String, Any?>>>> {
-        val defaultLayout = TextKeyboard.getDefaultLayout(showLangSwitch = true)
-        val rows = defaultLayout.map { row ->
-            row.map { keyDef ->
-                LayoutJsonUtils.keyDefToJson(keyDef)
-            }
+        val showLangSwitch = true
+        val defaultLayout = TextKeyboard.getDefaultLayout(showLangSwitch)
+        val defaultRows = defaultLayout.map { row ->
+            row.map { keyDef -> LayoutJsonUtils.keyDefToJson(keyDef) }
         }
-        return mapOf("default" to rows)
+        return mapOf(
+            "default" to defaultRows
+        )
     }
     
     /**

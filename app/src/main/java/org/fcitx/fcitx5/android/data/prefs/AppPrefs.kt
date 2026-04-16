@@ -20,6 +20,8 @@ import org.fcitx.fcitx5.android.input.candidates.horizontal.HorizontalCandidateM
 import org.fcitx.fcitx5.android.input.keyboard.LangSwitchBehavior
 import org.fcitx.fcitx5.android.input.keyboard.SpaceKeyLabelMode
 import org.fcitx.fcitx5.android.input.keyboard.SpaceLongPressBehavior
+import org.fcitx.fcitx5.android.input.keyboard.SpaceSwipeDownBehavior
+import org.fcitx.fcitx5.android.input.keyboard.SpaceSwipeUpBehavior
 import org.fcitx.fcitx5.android.input.keyboard.SwipeSymbolDirection
 import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import org.fcitx.fcitx5.android.input.popup.EmojiModifier
@@ -52,6 +54,11 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
     }
 
     inner class Advanced : ManagedPreferenceCategory(R.string.advanced, sharedPreferences) {
+        val appLanguage = enumList(
+            R.string.app_language,
+            "app_language",
+            AppLanguage.System
+        )
         val ignoreSystemCursor = switch(R.string.ignore_sys_cursor, "ignore_system_cursor", false)
         val hideKeyConfig = switch(R.string.hide_key_config, "hide_key_config", true)
         val disableAnimation = switch(R.string.disable_animation, "disable_animation", false)
@@ -184,7 +191,7 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val swipeSymbolDirection = enumList(
             R.string.swipe_symbol_behavior,
             "swipe_symbol_behavior",
-            SwipeSymbolDirection.Down
+            SwipeSymbolDirection.Up
         )
         val longPressDelay = int(
             R.string.keyboard_long_press_delay,
@@ -207,6 +214,18 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         )
         val spaceSwipeMoveCursor =
             switch(R.string.space_swipe_move_cursor, "space_swipe_move_cursor", true)
+        val backspaceSwipeDeleteAll =
+            switch(R.string.backspace_swipe_up_delete_all, "backspace_swipe_delete_all", true)
+        val spaceSwipeUpBehavior = enumList(
+            R.string.space_swipe_up_behavior,
+            "space_swipe_up_behavior",
+            SpaceSwipeUpBehavior.None
+        )
+        val spaceSwipeDownBehavior = enumList(
+            R.string.space_swipe_down_behavior,
+            "space_swipe_down_behavior",
+            SpaceSwipeDownBehavior.None
+        )
         val showLangSwitchKey =
             switch(R.string.show_lang_switch_key, "show_lang_switch_key", true)
         val textKeyboardLayoutProfile = ManagedPreference.PString(

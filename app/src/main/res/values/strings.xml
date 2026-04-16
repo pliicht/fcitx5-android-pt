@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name_release">Fcitx5.fx</string>
-    <string name="app_name_debug">Fcitx5.fx (Debug)</string>
+    <string name="app_name_release">Fcitx5.pt</string>
+    <string name="app_name_debug">Fcitx5.pt (Debug)</string>
     <string name="app_name_mainline_release">Fcitx5</string>
     <string name="app_name_mainline_debug">Fcitx5 (Debug)</string>
     <string name="save">Save</string>
@@ -10,6 +10,16 @@
     <string name="conf">Configuration</string>
     <string name="global_options">Global Options</string>
     <string name="advanced">Advanced</string>
+    <string name="app_language">Language</string>
+    <string name="language_system_default">System default</string>
+    <string name="language_english">English</string>
+    <string name="language_chinese_simplified">简体中文</string>
+    <string name="language_chinese_traditional">繁體中文</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_korean">한국어</string>
+    <string name="language_german">Deutsch</string>
+    <string name="language_russian">Русский</string>
+    <string name="language_spanish">Español</string>
     <string name="ignore_sys_cursor">Ignore system cursor position</string>
     <string name="hide_key_config">Hide hotkey configurations</string>
     <string name="allow_original_plugins">Allow third-party Fcitx5 plugins</string>
@@ -134,6 +144,9 @@
     <string name="punctuation_pos_bottom">Bottom (Portrait only)</string>
     <string name="punctuation_pos_top_right">Top Right</string>
     <string name="punctuation_pos_none">None</string>
+    <string name="hint_text_position">Hint text position</string>
+    <string name="hint_text_pos_bottom">Bottom</string>
+    <string name="hint_text_pos_none">None</string>
     <string name="expand_toolbar_by_default">Expand toolbar by default</string>
     <string name="toolbar_manually_toggled">Toolbar manually toggled</string>
     <string name="popup_on_key_press">Popup on key press</string>
@@ -289,6 +302,15 @@
     <string name="path_conflict">Path \"%1$s\" is already owned by %2$s</string>
     <string name="main_program">main program</string>
     <string name="edit_theme">Edit Theme</string>
+    <string name="category_appearance">Appearance</string>
+    <string name="category_layout">Layout</string>
+    <string name="category_keys">Keys</string>
+    <string name="category_gestures">Gestures</string>
+    <string name="category_splits">Splits</string>
+    <string name="category_keyboard_display">Keyboard Display</string>
+    <string name="category_feedback">Feedback</string>
+    <string name="category_advanced">Advanced</string>
+    <string name="category_toolbar">Toolbar</string>
     <string name="show_voice_input_button">Show voice input button</string>
     <string name="edit_fontset">Edit fontset</string>
     <string name="edit_fontset_summary">Edit fonts/fontset.json and preview font combinations</string>
@@ -308,7 +330,8 @@
     <string name="edit_button_title">Edit Button</string>
     <string name="delete_button_title">Delete Button</string>
     <string name="delete_button_confirm">Remove this button?</string>
-    <string name="popup_editor_hint">Tap an item to edit. Long press to delete.</string>
+    <string name="popup_editor_hint">Tap an item to edit. × to delete.</string>
+    <string name="popup_editor_search_hint">Search key or candidates…</string>
     <string name="popup_editor_add_mapping">Add mapping</string>
     <string name="popup_editor_key">Key</string>
     <string name="popup_editor_key_input_hint">Enter a key label, for example: q</string>
@@ -376,6 +399,9 @@
     <string name="open_rime_user_data_dir">Application data directory will be opened. RIME user data directory is located in \"data/rime\".</string>
     <string name="generic_multiselect_min">At least %1$d item(s) must be selected.</string>
     <string name="space_swipe_move_cursor">Swipe on space key to move cursor</string>
+    <string name="backspace_swipe_up_delete_all">Swipe up on backspace to delete all text</string>
+    <string name="space_swipe_up_behavior">Space key swipe up behavior</string>
+    <string name="space_swipe_down_behavior">Space key swipe down behavior</string>
     <string name="please_wait">Please wait…</string>
     <string name="rotate">Rotate</string>
     <string name="flip">Flip</string>
@@ -473,6 +499,12 @@
     <string name="text_keyboard_layout_key_type">Key Type</string>
     <string name="text_keyboard_layout_key_main">Main Character</string>
     <string name="text_keyboard_layout_key_alt">Alt Character</string>
+    <string name="text_keyboard_layout_key_hint">Hint Text (show under the main character)</string>
+    <string name="text_keyboard_layout_key_swipe_up_popup">Swipe Up Popup Text</string>
+    <string name="text_keyboard_layout_key_swipe_down_popup">Swipe Down Popup Text</string>
+    <string name="text_keyboard_layout_key_swipe_left_popup">Swipe Left Popup Text</string>
+    <string name="text_keyboard_layout_key_swipe_right_popup">Swipe Right Popup Text</string>
+    <string name="text_keyboard_layout_key_long_press_popup">Long Press Popup Text</string>
     <string name="text_keyboard_layout_key_display_text">Display Text</string>
     <string name="text_keyboard_layout_key_label">Label</string>
     <string name="text_keyboard_layout_key_sub_label">Sub Label</string>
@@ -520,7 +552,12 @@
     <string name="text_keyboard_layout_alphabet_key_alt_length_invalid">Alt character must be a single character</string>
     <string name="text_keyboard_layout_macro_key_label_required">Label must not be empty</string>
     <string name="text_keyboard_layout_validation_error">Validation Error</string>
-
+    <string name="text_keyboard_layout_backspace_swipe_up">Backspace swipe up: Delete all</string>
+    <string name="text_keyboard_layout_backspace_swipe_lr">Backspace swipe left/right: Select &amp; delete</string>
+    <string name="text_keyboard_layout_space_swipe_lr">Space swipe left/right: Move cursor</string>
+    <string name="text_keyboard_layout_space_swipe_up">Space swipe up behavior</string>
+    <string name="text_keyboard_layout_space_long_press">Space long press behavior</string>
+    <string name="text_keyboard_layout_gesture_settings">Gesture Settings</string>
     <!-- Macro Editor -->
     <string name="macro_editor_title">Edit %1$s</string>
     <string name="macro_editor_add_step">+ Add Step</string>
@@ -628,4 +665,36 @@
     <string name="preferred_voice_input">Preferred voice input</string>
     <string name="background_blur_radius">Background Blur Radius</string>
     <string name="no_blur">No Blur</string>
+    <!-- Key Editor: swipe/long press section labels -->
+    <string name="key_editor_swipe_longpress_label">Swipe / Long Press Actions</string>
+    <string name="key_editor_popup_preview_label">Popup Preview Settings</string>
+    <string name="key_editor_swipe_up_hint">Swipe up hint</string>
+    <string name="key_editor_swipe_down_hint">Swipe down hint</string>
+    <string name="key_editor_swipe_left_hint">Swipe left hint</string>
+    <string name="key_editor_swipe_right_hint">Swipe right hint</string>
+    <string name="key_editor_longpress_hint">Long press hint</string>
+    <string name="key_editor_swipe_up_btn">Swipe Up (↑)</string>
+    <string name="key_editor_swipe_down_btn">Swipe Down (↓)</string>
+    <string name="key_editor_swipe_left_btn">Swipe Left (←)</string>
+    <string name="key_editor_swipe_right_btn">Swipe Right (→)</string>
+    <string name="key_editor_longpress_btn">Long Press</string>
+    <string name="key_editor_swipe_up_event">Swipe Up Event</string>
+    <string name="key_editor_swipe_down_event">Swipe Down Event</string>
+    <string name="key_editor_swipe_left_event">Swipe Left Event</string>
+    <string name="key_editor_swipe_right_event">Swipe Right Event</string>
+    <string name="key_editor_longpress_event">Long Press Event</string>
+    <string name="key_editor_custom_behavior_label">Custom Key Actions</string>
+    <string name="key_editor_popup_hint">Hints are only shown when a swipe or long press action is set</string>
+    <string name="app_language_restart_warning">App will restart to apply language change</string>
+    <!-- Key type display names -->
+    <string name="key_type_alphabet">Alphabet Key</string>
+    <string name="key_type_caps">Caps Key</string>
+    <string name="key_type_layout_switch">Layout Switch</string>
+    <string name="key_type_comma">Comma Key</string>
+    <string name="key_type_language">Language Key</string>
+    <string name="key_type_space">Space Key</string>
+    <string name="key_type_symbol">Symbol Key</string>
+    <string name="key_type_return">Return Key</string>
+    <string name="key_type_backspace">Backspace Key</string>
+    <string name="key_type_macro">Macro Key</string>
 </resources>

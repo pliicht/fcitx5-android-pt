@@ -93,6 +93,7 @@ class MacroEditorActivity : AppCompatActivity() {
     private var originalSteps: List<Map<*, *>>? = null
     private var hasChanges = false
     private var saveMenuItem: MenuItem? = null
+    private var dialog: android.app.Dialog? = null
 
     companion object {
         const val EXTRA_MACRO_STEPS = "macro_steps"
@@ -866,7 +867,6 @@ class MacroEditorActivity : AppCompatActivity() {
 
     inner class StepViewHolder(private val container: LinearLayout) : RecyclerView.ViewHolder(container) {
         private lateinit var keysFlow: FlowLayout
-        private lateinit var typeSpinner: Spinner
         private lateinit var textEditContainer: LinearLayout
         private lateinit var deleteBtn: TextView
 
@@ -882,26 +882,79 @@ class MacroEditorActivity : AppCompatActivity() {
                 }
             }
 
-            // Type selector
-            typeSpinner = Spinner(this@MacroEditorActivity).apply {
-                layoutParams = LinearLayout.LayoutParams(wrapContent, wrapContent)
+            // Type selector with GridLayout
+            val typeGridLayout = android.widget.GridLayout(this@MacroEditorActivity).apply {
+                columnCount = 3
+                rowCount = 2
+                layoutParams = LinearLayout.LayoutParams(wrapContent, wrapContent).apply {
+                    marginEnd = dp(8)
+                }
             }
-            val typeAdapter = ArrayAdapter(
-                this@MacroEditorActivity,
-                android.R.layout.simple_spinner_item,
-                arrayOf(
-                    getString(R.string.macro_editor_step_type_tap),
-                    getString(R.string.macro_editor_step_type_shortcut),
-                    getString(R.string.macro_editor_step_type_edit),
-                    getString(R.string.macro_editor_step_type_down),
-                    getString(R.string.macro_editor_step_type_up),
-                    getString(R.string.macro_editor_step_type_text)
-                )
+            val typeLabels = arrayOf(
+                getString(R.string.macro_editor_step_type_tap),
+                getString(R.string.macro_editor_step_type_shortcut),
+                getString(R.string.macro_editor_step_type_edit),
+                getString(R.string.macro_editor_step_type_down),
+                getString(R.string.macro_editor_step_type_up),
+                getString(R.string.macro_editor_step_type_text)
             )
-            typeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            typeSpinner.adapter = typeAdapter
-            typeSpinner.setSelection(STEP_TYPES.indexOf(step.type))
-            contentRow.addView(typeSpinner)
+
+            val typeButtons = mutableListOf<TextView>()
+
+            typeLabels.forEachIndexed { index, label ->
+                val button = TextView(this@MacroEditorActivity).apply {
+                    text = label
+                    textSize = 13f
+                    gravity = Gravity.CENTER
+                    setPadding(dp(12), dp(8), dp(12), dp(8))
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(if (STEP_TYPES[index] == step.type) styledColor(android.R.attr.colorPrimary) else styledColor(android.R.attr.colorButtonNormal))
+                        setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                        cornerRadius = dp(4).toFloat()
+                    }
+                    layoutParams = ViewGroup.MarginLayoutParams(dp(72), wrapContent).apply {
+                        marginEnd = dp(6)
+                        bottomMargin = dp(6)
+                    }
+                    setOnClickListener {
+                        val oldType = step.type
+                        val newType = STEP_TYPES[index]
+                        if (oldType != newType) {
+                            val willClearData = (oldType == "edit" && newType != "edit" && step.keys.isNotEmpty()) ||
+                                                (oldType != "edit" && newType == "edit" && step.keys.isNotEmpty()) ||
+                                                (oldType == "text" && newType != "text" && step.text.isNotEmpty()) ||
+                                                (oldType != "text" && newType == "text" && step.text.isNotEmpty())
+                            if (willClearData) {
+                                AlertDialog.Builder(this@MacroEditorActivity)
+                                    .setTitle(R.string.macro_editor_type_change_title)
+                                    .setMessage(R.string.macro_editor_type_change_message)
+                                    .setPositiveButton(R.string.macro_editor_confirm) { _, _ ->
+                                        step.type = newType
+                                        if (oldType == "edit" && newType != "edit") step.keys.clear()
+                                        if (oldType != "edit" && newType == "edit") step.keys.clear()
+                                        if (oldType == "text" && newType != "text") step.text = ""
+                                        if (oldType != "text" && newType == "text") step.keys.clear()
+                                        refreshTypeButtons(typeButtons, step.type)
+                                        updateVisibility(step)
+                                        renderKeys(step)
+                                        updateSaveButtonState()
+                                    }
+                                    .setNegativeButton(R.string.macro_editor_cancel, null)
+                                    .show()
+                            } else {
+                                step.type = newType
+                                refreshTypeButtons(typeButtons, step.type)
+                                updateVisibility(step)
+                                renderKeys(step)
+                                updateSaveButtonState()
+                            }
+                        }
+                    }
+                }
+                typeButtons.add(button)
+                typeGridLayout.addView(button)
+            }
+            contentRow.addView(typeGridLayout)
 
             // Key FlowLayout container - use weight=1f to take remaining space
             val keysFlowContainer = LinearLayout(this@MacroEditorActivity).apply {
@@ -987,62 +1040,6 @@ class MacroEditorActivity : AppCompatActivity() {
 
             // Render key chips
             renderKeys(step)
-
-            // Type switch listener
-            typeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
-                    val oldType = step.type
-                    val newType = STEP_TYPES[pos]
-                    
-                    // Check if type change would clear data
-                    val willClearData = (oldType == "edit" && newType != "edit" && step.keys.isNotEmpty()) ||
-                                        (oldType != "edit" && newType == "edit" && step.keys.isNotEmpty()) ||
-                                        (oldType == "text" && newType != "text" && step.text.isNotEmpty()) ||
-                                        (oldType != "text" && newType == "text" && step.text.isNotEmpty())
-                    
-                    if (willClearData) {
-                        // Show confirmation dialog before clearing data
-                        AlertDialog.Builder(this@MacroEditorActivity)
-                            .setTitle(R.string.macro_editor_type_change_title)
-                            .setMessage(R.string.macro_editor_type_change_message)
-                            .setPositiveButton(R.string.macro_editor_confirm) { _, _ ->
-                                step.type = newType
-                                // Clear old data when switching types
-                                if (oldType == "edit" && newType != "edit") {
-                                    step.keys.clear()
-                                }
-                                if (oldType != "edit" && newType == "edit") {
-                                    step.keys.clear()
-                                }
-                                if (oldType == "text" && newType != "text") {
-                                    step.text = ""
-                                }
-                                if (oldType != "text" && newType == "text") {
-                                    step.keys.clear()
-                                }
-                                updateVisibility(step)
-                                renderKeys(step)
-                                updateSaveButtonState()
-                            }
-                            .setNegativeButton(R.string.macro_editor_cancel) { _, _ ->
-                                // Revert spinner to old type
-                                typeSpinner.setSelection(STEP_TYPES.indexOf(oldType))
-                            }
-                            .setOnCancelListener {
-                                // Revert spinner to old type when dialog is cancelled
-                                typeSpinner.setSelection(STEP_TYPES.indexOf(oldType))
-                            }
-                            .show()
-                    } else {
-                        // No data will be cleared, proceed with type change
-                        step.type = newType
-                        updateVisibility(step)
-                        renderKeys(step)
-                        updateSaveButtonState()
-                    }
-                }
-                override fun onNothingSelected(parent: AdapterView<*>?) {}
-            }
         }
         
         private fun updateVisibility(step: MacroStepData) {
@@ -1050,6 +1047,14 @@ class MacroEditorActivity : AppCompatActivity() {
             // Hide keysFlow for text type; show it for other types
             keysFlow.visibility = if (isTextType) View.GONE else View.VISIBLE
             textEditContainer.visibility = if (isTextType) View.VISIBLE else View.GONE
+        }
+
+        private fun refreshTypeButtons(buttons: List<TextView>, currentType: String) {
+            buttons.forEachIndexed { index, button ->
+                (button.background as? android.graphics.drawable.GradientDrawable)?.setColor(
+                    if (STEP_TYPES[index] == currentType) styledColor(android.R.attr.colorPrimary) else styledColor(android.R.attr.colorButtonNormal)
+                )
+            }
         }
 
         
@@ -1173,7 +1178,7 @@ class MacroEditorActivity : AppCompatActivity() {
         }
 
         /**
-         * Show edit action picker
+         * Show edit action picker with grid layout
          */
         private fun showClipboardActionPicker(onSelect: (String) -> Unit) {
             val actions = arrayOf("copy", "cut", "paste", "selectAll", "undo", "redo")
@@ -1185,11 +1190,40 @@ class MacroEditorActivity : AppCompatActivity() {
                 getString(R.string.macro_editor_action_undo),
                 getString(R.string.macro_editor_action_redo)
             )
-            AlertDialog.Builder(this@MacroEditorActivity)
-                .setTitle(R.string.macro_editor_picker_title)
-                .setItems(actionLabels) { _, which ->
-                    onSelect(actions[which])
+
+            val gridView = android.widget.GridView(this@MacroEditorActivity).apply {
+                numColumns = 3
+                stretchMode = android.widget.GridView.STRETCH_COLUMN_WIDTH
+                horizontalSpacing = dp(8)
+                verticalSpacing = dp(8)
+                setPadding(dp(16), dp(16), dp(16), dp(16))
+                adapter = object : android.widget.BaseAdapter() {
+                    override fun getCount() = actionLabels.size
+                    override fun getItem(position: Int) = actionLabels[position]
+                    override fun getItemId(position: Int) = position.toLong()
+                    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                        val textView = if (convertView is android.widget.TextView) convertView else android.widget.TextView(this@MacroEditorActivity)
+                        textView.text = actionLabels[position]
+                        textView.textSize = 14f
+                        textView.gravity = Gravity.CENTER
+                        textView.setPadding(dp(12), dp(12), dp(12), dp(12))
+                        textView.background = android.graphics.drawable.GradientDrawable().apply {
+                            setColor(styledColor(android.R.attr.colorButtonNormal))
+                            setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                            cornerRadius = dp(8).toFloat()
+                        }
+                        return textView
+                    }
                 }
+                onItemClickListener = android.widget.AdapterView.OnItemClickListener { _, _, position, _ ->
+                    onSelect(actions[position])
+                    (dialog as? android.app.Dialog)?.dismiss()
+                }
+            }
+
+            dialog = AlertDialog.Builder(this@MacroEditorActivity)
+                .setTitle(R.string.macro_editor_picker_title)
+                .setView(gridView)
                 .setNegativeButton(R.string.macro_editor_picker_cancel, null)
                 .show()
         }
@@ -1228,53 +1262,60 @@ class MacroEditorActivity : AppCompatActivity() {
             // Not adding keyTypeRow to dialogView - hidden from UI
             // dialogView.addView(keyTypeRow)
 
-            // Key value selector
-            val keyValueRow = LinearLayout(this@MacroEditorActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(4), 0, dp(4))
-            }
+            // Key value selector with GridView
             val keyValueLabel = TextView(this@MacroEditorActivity).apply {
                 text = getString(R.string.macro_editor_key_value_label)
                 textSize = 14f
-                layoutParams = LinearLayout.LayoutParams(wrapContent, wrapContent)
+                setPadding(0, dp(8), 0, dp(8))
             }
-            keyValueRow.addView(keyValueLabel)
+            dialogView.addView(keyValueLabel)
 
-            val keyValueSpinner = Spinner(this@MacroEditorActivity, Spinner.MODE_DROPDOWN).apply {
-                layoutParams = LinearLayout.LayoutParams(0, wrapContent).apply {
-                    weight = 1f
-                    marginStart = dp(8)
+            val keysList = if (key.keyType == "fcitx") FCITX_KEYS else ANDROID_KEYS
+            val displayList = if (key.keyType == "fcitx") {
+                FCITX_KEYS.map { getFcitxKeyDisplayName(it) }
+            } else {
+                ANDROID_KEYS.map { ANDROID_KEY_NAMES[it] ?: it }
+            }
+            var selectedKeyCode = key.code
+
+            val keyGridView = android.widget.GridView(this@MacroEditorActivity).apply {
+                numColumns = 4
+                stretchMode = android.widget.GridView.STRETCH_COLUMN_WIDTH
+                horizontalSpacing = dp(4)
+                verticalSpacing = dp(4)
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+                adapter = object : android.widget.BaseAdapter() {
+                    override fun getCount() = displayList.size
+                    override fun getItem(position: Int) = displayList[position]
+                    override fun getItemId(position: Int) = position.toLong()
+                    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                        val textView = if (convertView is android.widget.TextView) convertView else android.widget.TextView(this@MacroEditorActivity)
+                        textView.text = displayList[position]
+                        textView.textSize = 12f
+                        textView.gravity = Gravity.CENTER
+                        textView.setPadding(dp(8), dp(6), dp(8), dp(6))
+                        textView.background = android.graphics.drawable.GradientDrawable().apply {
+                            setColor(if (keysList[position].equals(selectedKeyCode, ignoreCase = true)) styledColor(android.R.attr.colorPrimary) else styledColor(android.R.attr.colorButtonNormal))
+                            setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                            cornerRadius = dp(4).toFloat()
+                        }
+                        return textView
+                    }
+                }
+                onItemClickListener = android.widget.AdapterView.OnItemClickListener { _, _, position, _ ->
+                    selectedKeyCode = keysList[position]
+                    // Refresh to show selection
+                    (adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
                 }
             }
-            val keysList = if (key.keyType == "fcitx") FCITX_KEYS else ANDROID_KEYS
-            // Use friendly names (Android key codes show as names, Fcitx keys show with symbol hints)
-            val displayList = if (key.keyType == "fcitx") {
-                FCITX_KEYS.map { getFcitxKeyDisplayName(it) }.toTypedArray()
-            } else {
-                ANDROID_KEYS.map { ANDROID_KEY_NAMES[it] ?: it }.toTypedArray()
-            }
-            val keyValueAdapter = ArrayAdapter(
-                this@MacroEditorActivity,
-                android.R.layout.simple_spinner_item,
-                displayList
-            )
-            // Use a custom dropdown view to show more content in one line
-            keyValueAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
-            keyValueSpinner.adapter = keyValueAdapter
-            // Try to match current key value (case-insensitive)
-            val keyIndex = keysList.indexOfFirst { it.equals(key.code, ignoreCase = true) }.takeIf { it >= 0 } ?: 0
-            keyValueSpinner.setSelection(keyIndex)
-            keyValueRow.addView(keyValueSpinner)
-            dialogView.addView(keyValueRow)
+            dialogView.addView(keyGridView)
 
             val dialog = AlertDialog.Builder(this@MacroEditorActivity)
                 .setTitle(R.string.macro_editor_edit_key_title)
                 .setView(dialogView)
                 .setPositiveButton(R.string.macro_editor_confirm) { _, _ ->
                     key.keyType = KEY_TYPES[keyTypeEditSpinner.selectedItemPosition]
-                    val currentKeysList = if (key.keyType == "fcitx") FCITX_KEYS else ANDROID_KEYS
-                    key.code = currentKeysList[keyValueSpinner.selectedItemPosition]
+                    key.code = selectedKeyCode
                     onSuccess()
                 }
                 .setNegativeButton(R.string.macro_editor_cancel) { _, _ ->
@@ -1295,29 +1336,41 @@ class MacroEditorActivity : AppCompatActivity() {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
                     val newKeyType = KEY_TYPES[pos]
                     val newKeysList = if (newKeyType == "fcitx") FCITX_KEYS else ANDROID_KEYS
-                    // Use friendly names
                     val newDisplayList = if (newKeyType == "fcitx") {
-                        FCITX_KEYS.map { getFcitxKeyDisplayName(it) }.toTypedArray()
+                        FCITX_KEYS.map { getFcitxKeyDisplayName(it) }
                     } else {
-                        ANDROID_KEYS.map { ANDROID_KEY_NAMES[it] ?: it }.toTypedArray()
+                        ANDROID_KEYS.map { ANDROID_KEY_NAMES[it] ?: it }
                     }
-                    val newAdapter = ArrayAdapter(
-                        this@MacroEditorActivity,
-                        android.R.layout.simple_spinner_item,
-                        newDisplayList
-                    )
-                    newAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                    keyValueSpinner.adapter = newAdapter
-                    // Try to match current value
-                    val newIndex = newKeysList.indexOfFirst { it.equals(key.code, ignoreCase = true) }.takeIf { it >= 0 } ?: 0
-                    keyValueSpinner.setSelection(newIndex)
+                    selectedKeyCode = newKeysList.first()
+                    keyGridView.adapter = object : android.widget.BaseAdapter() {
+                        override fun getCount() = newDisplayList.size
+                        override fun getItem(position: Int) = newDisplayList[position]
+                        override fun getItemId(position: Int) = position.toLong()
+                        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                            val textView = if (convertView is android.widget.TextView) convertView else android.widget.TextView(this@MacroEditorActivity)
+                            textView.text = newDisplayList[position]
+                            textView.textSize = 12f
+                            textView.gravity = Gravity.CENTER
+                            textView.setPadding(dp(8), dp(6), dp(8), dp(6))
+                            textView.background = android.graphics.drawable.GradientDrawable().apply {
+                                setColor(if (newKeysList[position].equals(selectedKeyCode, ignoreCase = true)) styledColor(android.R.attr.colorPrimary) else styledColor(android.R.attr.colorButtonNormal))
+                                setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                                cornerRadius = dp(4).toFloat()
+                            }
+                            return textView
+                        }
+                    }
+                    keyGridView.onItemClickListener = android.widget.AdapterView.OnItemClickListener { _, _, position, _ ->
+                        selectedKeyCode = newKeysList[position]
+                        (keyGridView.adapter as? android.widget.BaseAdapter)?.notifyDataSetChanged()
+                    }
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) {}
             }
         }
 
         /**
-         * Show modifier key selector
+         * Show modifier key selector with grid layout
          */
         private fun showModifierPicker(currentModifiers: List<KeyData>, onSelect: (String) -> Unit) {
             val availableModifiers = arrayOf(
@@ -1338,11 +1391,39 @@ class MacroEditorActivity : AppCompatActivity() {
                 return
             }
 
-            AlertDialog.Builder(this@MacroEditorActivity)
-                .setTitle(R.string.macro_editor_select_modifier_title)
-                .setItems(availableModifiers.toTypedArray()) { _, which ->
-                    onSelect(availableModifiers[which])
+            val gridView = android.widget.GridView(this@MacroEditorActivity).apply {
+                numColumns = 3
+                stretchMode = android.widget.GridView.STRETCH_COLUMN_WIDTH
+                horizontalSpacing = dp(8)
+                verticalSpacing = dp(8)
+                setPadding(dp(16), dp(16), dp(16), dp(16))
+                adapter = object : android.widget.BaseAdapter() {
+                    override fun getCount() = availableModifiers.size
+                    override fun getItem(position: Int) = availableModifiers[position]
+                    override fun getItemId(position: Int) = position.toLong()
+                    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                        val textView = if (convertView is android.widget.TextView) convertView else android.widget.TextView(this@MacroEditorActivity)
+                        textView.text = availableModifiers[position]
+                        textView.textSize = 14f
+                        textView.gravity = Gravity.CENTER
+                        textView.setPadding(dp(12), dp(12), dp(12), dp(12))
+                        textView.background = android.graphics.drawable.GradientDrawable().apply {
+                            setColor(styledColor(android.R.attr.colorButtonNormal))
+                            setStroke(dp(1), styledColor(android.R.attr.colorControlNormal))
+                            cornerRadius = dp(8).toFloat()
+                        }
+                        return textView
+                    }
                 }
+                onItemClickListener = android.widget.AdapterView.OnItemClickListener { _, _, position, _ ->
+                    onSelect(availableModifiers[position])
+                    dialog?.dismiss()
+                }
+            }
+
+            dialog = AlertDialog.Builder(this@MacroEditorActivity)
+                .setTitle(R.string.macro_editor_select_modifier_title)
+                .setView(gridView)
                 .setNegativeButton(R.string.macro_editor_cancel, null)
                 .show()
         }

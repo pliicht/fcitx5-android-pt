@@ -31,6 +31,19 @@ class KeyboardEditorUiBuilder(private val activity: AppCompatActivity) {
         private const val DIALOG_LABEL_TEXT_SIZE_SP = 13f
         private const val DIALOG_CONTENT_TEXT_SIZE_SP = 14f
 
+        val KEY_TYPE_IDS = arrayOf(
+            R.string.key_type_alphabet,
+            R.string.key_type_caps,
+            R.string.key_type_layout_switch,
+            R.string.key_type_comma,
+            R.string.key_type_language,
+            R.string.key_type_space,
+            R.string.key_type_symbol,
+            R.string.key_type_return,
+            R.string.key_type_backspace,
+            R.string.key_type_macro
+        )
+
         val KEY_TYPES = arrayOf(
             "AlphabetKey",
             "CapsKey",
@@ -70,7 +83,8 @@ class KeyboardEditorUiBuilder(private val activity: AppCompatActivity) {
                 weight = 1f
             }
         }
-        val typeAdapter = ArrayAdapter(activity, android.R.layout.simple_spinner_item, KEY_TYPES)
+        val typeAdapter = ArrayAdapter(activity, android.R.layout.simple_spinner_item,
+            KEY_TYPE_IDS.map { activity.getString(it) })
         typeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         typeSpinner.adapter = typeAdapter
 

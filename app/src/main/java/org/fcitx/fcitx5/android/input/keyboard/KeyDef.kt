@@ -80,6 +80,7 @@ open class KeyDef(
             displayText: String,
             val altText: String,
             val character: String,
+            val hintText: String? = null,
             textSize: Float,
             /**
              * `Int` constants in [Typeface].
@@ -214,6 +215,15 @@ open class KeyDef(
             val action: KeyAction
         ) : Behavior()
 
+        enum class SwipeDirection {
+            Up, Down, Left, Right
+        }
+
+        class SwipeDir(
+            val action: KeyAction,
+            val direction: SwipeDirection
+        ) : Behavior()
+
         class DoubleTap(
             val action: KeyAction
         ) : Behavior()
@@ -224,7 +234,50 @@ open class KeyDef(
 
         class AltPreview(content: String, val alternative: String) : Preview(content)
 
+        /**
+         * Custom direction popup preview for AlphabetKey.
+         * Unlike AltPreview which is gated by the global popupOnKeyPress preference,
+         * this always shows a preview when the key is pressed, using per-direction popup text.
+         * Each direction has its own enabled flag controlled independently in the key editor.
+         * @param content Default preview text (the character)
+         * @param swipeUpPopup Text to show on swipe up, or null
+         * @param swipeDownPopup Text to show on swipe down, or null
+         * @param swipeLeftPopup Text to show on swipe left, or null
+         * @param swipeRightPopup Text to show on swipe right, or null
+         * @param longPressPopup Text to show on long press preview, or null
+         * @param swipeUpEnabled Whether swipe up popup is enabled
+         * @param swipeDownEnabled Whether swipe down popup is enabled
+         * @param swipeLeftEnabled Whether swipe left popup is enabled
+         * @param swipeRightEnabled Whether swipe right popup is enabled
+         * @param longPressEnabled Whether long press popup preview is enabled
+         */
+        class CustomAltPreview(
+            content: String,
+            val swipeUpPopup: String?,
+            val swipeDownPopup: String?,
+            val swipeLeftPopup: String?,
+            val swipeRightPopup: String?,
+            val longPressPopup: String?,
+            val swipeUpEnabled: Boolean = true,
+            val swipeDownEnabled: Boolean = true,
+            val swipeLeftEnabled: Boolean = true,
+            val swipeRightEnabled: Boolean = true,
+            val longPressEnabled: Boolean = true
+        ) : Preview(content)
+
         class Keyboard(val label: String) : Popup()
+
+        /**
+         * Custom keyboard popup with explicit keys list.
+         * Unlike [Keyboard] which looks up candidates from PopupPreset by label,
+         * this provides the candidates directly.
+         * @param extraKeys custom candidate texts to prepend before preset candidates
+         * @param label base label to lookup remaining candidates from PopupPreset
+         */
+        class CustomKeyboard(
+            val extraKeys: Array<String>,
+            val label: String
+        ) : Popup()
 
         class Menu(val items: Array<Item>) : Popup() {
             class Item(val label: String, @DrawableRes val icon: Int, val action: KeyAction)

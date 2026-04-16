@@ -103,6 +103,17 @@ class ThemePrefs(sharedPreferences: SharedPreferences) :
         PunctuationPosition.Bottom
     )
 
+    enum class HintTextPosition(override val stringRes: Int) : ManagedPreferenceEnum {
+        None(R.string.hint_text_pos_none),
+        Bottom(R.string.hint_text_pos_bottom);
+    }
+
+    val hintTextPosition = enumList(
+        R.string.hint_text_position,
+        "hint_text_position",
+        HintTextPosition.Bottom
+    )
+
     enum class NavbarBackground(override val stringRes: Int) : ManagedPreferenceEnum {
         None(R.string.navbar_bkg_none),
         ColorOnly(R.string.navbar_bkg_color_only),

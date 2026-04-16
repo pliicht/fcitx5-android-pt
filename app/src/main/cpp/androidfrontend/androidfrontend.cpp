@@ -277,8 +277,7 @@ private:
     }
 
     inline std::string filterCandidate(const CandidateWord &candidate) {
-        const std::string separator = candidate.spaceBetweenComment() ? " " : "";
-        return filterString(candidate.textWithComment(separator));
+        return filterString(candidate.textWithComment(" "));
     }
 };
 

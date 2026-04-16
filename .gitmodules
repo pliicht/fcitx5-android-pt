@@ -5,6 +5,7 @@
 	path = lib/fcitx5/src/main/cpp/prebuilt
 	url = https://github.com/fcitx5-android/prebuilt.git
 	shallow = true
+	ignore = dirty
 [submodule "lib/fcitx5-lua/src/main/cpp/fcitx5-lua"]
 	path = lib/fcitx5-lua/src/main/cpp/fcitx5-lua
 	url = https://github.com/fcitx/fcitx5-lua.git

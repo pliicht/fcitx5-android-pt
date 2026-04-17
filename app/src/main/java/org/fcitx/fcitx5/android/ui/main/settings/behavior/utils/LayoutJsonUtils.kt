@@ -805,7 +805,18 @@ object LayoutJsonUtils {
                     backgroundColor = key.backgroundColor,
                     backgroundColorMonet = key.backgroundColorMonet,
                     shadowColor = key.shadowColor,
-                    shadowColorMonet = key.shadowColorMonet
+                    shadowColorMonet = key.shadowColorMonet,
+                    hintText = key.hint,
+                    swipeUpPopupText = key.swipeUpPopup,
+                    swipeDownPopupText = key.swipeDownPopup,
+                    swipeLeftPopupText = key.swipeLeftPopup,
+                    swipeRightPopupText = key.swipeRightPopup,
+                    longPressPopupText = key.longPressPopup,
+                    swipeUpPopupEnabled = key.swipeUpPopupEnabled,
+                    swipeDownPopupEnabled = key.swipeDownPopupEnabled,
+                    swipeLeftPopupEnabled = key.swipeLeftPopupEnabled,
+                    swipeRightPopupEnabled = key.swipeRightPopupEnabled,
+                    longPressPopupEnabled = key.longPressPopupEnabled
                 )
             }
             else -> SpaceKey() // Fallback

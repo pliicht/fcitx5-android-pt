@@ -606,7 +606,18 @@ class MacroKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    val hintText: String? = null,
+    val swipeUpPopupText: String? = null,
+    val swipeDownPopupText: String? = null,
+    val swipeLeftPopupText: String? = null,
+    val swipeRightPopupText: String? = null,
+    val longPressPopupText: String? = null,
+    val swipeUpPopupEnabled: Boolean = true,
+    val swipeDownPopupEnabled: Boolean = true,
+    val swipeLeftPopupEnabled: Boolean = true,
+    val swipeRightPopupEnabled: Boolean = true,
+    val longPressPopupEnabled: Boolean = true
 ) : KeyDef(
     Appearance.AltText(
         displayText = label,
@@ -622,10 +633,11 @@ class MacroKey(
         backgroundColor = backgroundColor,
         backgroundColorMonet = backgroundColorMonet,
         shadowColor = shadowColor,
-        shadowColorMonet = shadowColorMonet
+        shadowColorMonet = shadowColorMonet,
+        hintText = hintText
     ),
     buildBehaviors(tap, swipe, swipeUp, swipeDown, swipeLeft, swipeRight, longPress),
-    buildPopup(popup, tap, label, longPress, longPressLabel)
+    buildPopup(popup, tap, label, longPress, longPressLabel, swipeUpPopupText, swipeDownPopupText, swipeLeftPopupText, swipeRightPopupText, longPressPopupText, swipeUpPopupEnabled, swipeDownPopupEnabled, swipeLeftPopupEnabled, swipeRightPopupEnabled, longPressPopupEnabled)
 ) {
     private companion object {
         private val FCITX_SYMBOL_LABELS = mapOf(
@@ -713,6 +725,7 @@ class MacroKey(
 
         /**
          * Build popup based on macro content
+         * - If swipe popup texts are configured, use CustomAltPreview
          * - If longPress macro is configured, it appears as the first candidate in the popup
          * - If tap macro has only one tap key, generate popup for that key
          * - Otherwise, generate popup based on label (preview on press, menu on long press)
@@ -722,7 +735,17 @@ class MacroKey(
             tap: MacroAction,
             label: String,
             longPress: MacroAction? = null,
-            longPressLabel: String? = null
+            longPressLabel: String? = null,
+            swipeUpPopupText: String? = null,
+            swipeDownPopupText: String? = null,
+            swipeLeftPopupText: String? = null,
+            swipeRightPopupText: String? = null,
+            longPressPopupText: String? = null,
+            swipeUpPopupEnabled: Boolean = true,
+            swipeDownPopupEnabled: Boolean = true,
+            swipeLeftPopupEnabled: Boolean = true,
+            swipeRightPopupEnabled: Boolean = true,
+            longPressPopupEnabled: Boolean = true
         ): Array<Popup>? {
             // If explicit popup is provided, use it
             if (explicitPopup != null) {
@@ -731,56 +754,75 @@ class MacroKey(
 
             val popupList = mutableListOf<Popup>()
 
-            // Check if there's exactly one tap step with one key
-            val singleTapKey = if (tap.steps.size == 1 && tap.steps[0] is MacroStep.Tap) {
-                val tapStep = tap.steps[0] as MacroStep.Tap
-                if (tapStep.keys.size == 1) tapStep.keys[0] else null
-            } else null
+            val hasAnyPopupText = swipeUpPopupText != null || swipeDownPopupText != null ||
+                    swipeLeftPopupText != null || swipeRightPopupText != null || longPressPopupText != null
 
-            val otherPopups = if (singleTapKey != null) {
-                // Generate popup based on the single key
-                when (singleTapKey) {
-                    is KeyRef.Fcitx -> {
-                        val display = FCITX_SYMBOL_LABELS[singleTapKey.code.lowercase()] ?: singleTapKey.code
-                        // Keep AlphabetKey-like alt preview for letters.
-                        if (display.length == 1 && display[0].isLetter()) {
-                            val upper = display.uppercase()
-                            arrayOf(
-                                Popup.AltPreview(display, upper),
-                                Popup.Keyboard(display)
-                            )
-                        } else {
-                            // Symbol/emoji/non-letter keys should still expose popup keyboard like SymbolKey.
-                            arrayOf(
-                                Popup.Preview(display),
-                                Popup.Keyboard(display)
-                            )
+            if (hasAnyPopupText) {
+                // Use CustomAltPreview for direction-specific popup hints
+                popupList.add(Popup.CustomAltPreview(
+                    content = label,
+                    swipeUpPopup = swipeUpPopupText,
+                    swipeDownPopup = swipeDownPopupText,
+                    swipeLeftPopup = swipeLeftPopupText,
+                    swipeRightPopup = swipeRightPopupText,
+                    longPressPopup = longPressPopupText,
+                    swipeUpEnabled = swipeUpPopupEnabled,
+                    swipeDownEnabled = swipeDownPopupEnabled,
+                    swipeLeftEnabled = swipeLeftPopupEnabled,
+                    swipeRightEnabled = swipeRightPopupEnabled,
+                    longPressEnabled = longPressPopupEnabled
+                ))
+            } else {
+                // Check if there's exactly one tap step with one key
+                val singleTapKey = if (tap.steps.size == 1 && tap.steps[0] is MacroStep.Tap) {
+                    val tapStep = tap.steps[0] as MacroStep.Tap
+                    if (tapStep.keys.size == 1) tapStep.keys[0] else null
+                } else null
+
+                val otherPopups = if (singleTapKey != null) {
+                    // Generate popup based on the single key
+                    when (singleTapKey) {
+                        is KeyRef.Fcitx -> {
+                            val display = FCITX_SYMBOL_LABELS[singleTapKey.code.lowercase()] ?: singleTapKey.code
+                            // Keep AlphabetKey-like alt preview for letters.
+                            if (display.length == 1 && display[0].isLetter()) {
+                                val upper = display.uppercase()
+                                arrayOf(
+                                    Popup.AltPreview(display, upper),
+                                    Popup.Keyboard(display)
+                                )
+                            } else {
+                                // Symbol/emoji/non-letter keys should still expose popup keyboard like SymbolKey.
+                                arrayOf(
+                                    Popup.Preview(display),
+                                    Popup.Keyboard(display)
+                                )
+                            }
+                        }
+                        is KeyRef.Android -> {
+                            // Android key codes show as numbers
+                            arrayOf(Popup.Preview(singleTapKey.code.toString()))
                         }
                     }
-                    is KeyRef.Android -> {
-                        // Android key codes show as numbers
-                        arrayOf(Popup.Preview(singleTapKey.code.toString()))
+                } else {
+                    // Non-single-tap case: generate popup based on label
+                    // If label is single letter, generate same popup as AlphabetKey
+                    if (label.length == 1 && label[0].isLetter()) {
+                        val upper = label.uppercase()
+                        arrayOf(
+                            Popup.AltPreview(label, upper),
+                            Popup.Keyboard(label)
+                        )
+                    } else {
+                        // Non-letter labels should still expose popup keyboard.
+                        arrayOf(
+                            Popup.Preview(label),
+                            Popup.Keyboard(label)
+                        )
                     }
                 }
-            } else {
-                // Non-single-tap case: generate popup based on label
-                // If label is single letter, generate same popup as AlphabetKey
-                if (label.length == 1 && label[0].isLetter()) {
-                    val upper = label.uppercase()
-                    arrayOf(
-                        Popup.AltPreview(label, upper),
-                        Popup.Keyboard(label)
-                    )
-                } else {
-                    // Non-letter labels should still expose popup keyboard.
-                    arrayOf(
-                        Popup.Preview(label),
-                        Popup.Keyboard(label)
-                    )
-                }
+                popupList.addAll(otherPopups)
             }
-
-            popupList.addAll(otherPopups)
 
             // Register LongPressKeyboard after previews so its gesture listener runs first on key-up.
             // The longPress macro still appears as the first candidate inside popup keyboard UI.

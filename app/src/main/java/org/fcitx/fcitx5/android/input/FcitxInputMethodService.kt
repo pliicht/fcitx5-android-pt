@@ -296,6 +296,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     private val inlineSuggestions by prefs.keyboard.inlineSuggestions
     private val ignoreSystemCursor by prefs.advanced.ignoreSystemCursor
 
+
+
     private val recreateInputViewPrefs: Array<ManagedPreference<*>> = arrayOf(
         prefs.keyboard.expandKeypressArea,
         prefs.advanced.disableAnimation,

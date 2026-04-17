@@ -421,7 +421,6 @@ class AltTextKeyView(
     TextKeyView(ctx, theme, def, horizontalGapScale) {
     private enum class AltTextLayoutMode {
         TopRight,
-        Bottom,
         Hidden
     }
 
@@ -500,7 +499,21 @@ class AltTextKeyView(
     }
 
     private fun isHintTextVisible(): Boolean {
-        return hintTextView != null && ThemeManager.prefs.hintTextPosition.getValue() != HintTextPosition.None
+        if (hintTextView == null) return false
+        if (ThemeManager.prefs.hintTextPosition.getValue() == HintTextPosition.None) return false
+        // In landscape mode, hide hint text if key is too short to fit it
+        val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        if (landscape) {
+            val keyHeight = appearanceView.height
+            if (keyHeight > 0) {
+                val contentHeight = keyHeight - vMargin * 2
+                val mainHeight = mainText.paint.run { fontMetrics.bottom - fontMetrics.top }
+                val hintHeight = hintTextView.paint.run { fontMetrics.bottom - fontMetrics.top }
+                // Need at least main text + hint text + some spacing
+                if (contentHeight < mainHeight + hintHeight + dp(6)) return false
+            }
+        }
+        return true
     }
 
     private fun applyTopRightAltTextPosition() {
@@ -546,71 +559,6 @@ class AltTextKeyView(
         }
     }
 
-    private fun applyBottomAltTextPosition() {
-        val showHint = isHintTextVisible()
-
-        // mainText vertically centered, hintText below mainText, altText at bottom
-        mainText.updateLayoutParams<ConstraintLayout.LayoutParams> {
-            // reset
-            bottomToTop = unset
-            topMargin = 0
-            // set: vertically centered with bias
-            topToTop = parentId
-            bottomToBottom = parentId
-            verticalBias = 0.4f  // slightly above center to leave room for hintText and altText below
-        }
-
-        if (showHint) {
-            // Chain: mainText → hintText → altText
-            hintTextView?.apply {
-                visibility = View.VISIBLE
-                updateLayoutParams<ConstraintLayout.LayoutParams> {
-                    width = 0
-                    // reset
-                    topToTop = unset; topMargin = 0
-                    // set
-                    leftMargin = hMargin
-                    rightMargin = hMargin
-                    topToBottom = mainText.existingOrNewId
-                    bottomToTop = altText.existingOrNewId
-                    leftToLeft = parentId
-                    rightToRight = parentId
-                }
-                gravity = Gravity.CENTER
-            }
-            altText.visibility = View.VISIBLE
-            altText.updateLayoutParams<ConstraintLayout.LayoutParams> {
-                width = 0
-                // reset
-                topToTop = unset; topMargin = 0
-                // set
-                leftMargin = hMargin
-                rightMargin = hMargin
-                leftToLeft = parentId
-                rightToRight = parentId
-                bottomToBottom = parentId; bottomMargin = vMargin + dp(2)
-            }
-            altText.gravity = Gravity.CENTER
-        } else {
-            // Chain: mainText → altText
-            altText.visibility = View.VISIBLE
-            altText.updateLayoutParams<ConstraintLayout.LayoutParams> {
-                width = 0
-                // reset
-                topToTop = unset; topMargin = 0
-                // set
-                leftMargin = hMargin
-                rightMargin = hMargin
-                leftToLeft = parentId
-                rightToRight = parentId
-                topToBottom = mainText.existingOrNewId
-                bottomToBottom = parentId; bottomMargin = vMargin + dp(2)
-            }
-            altText.gravity = Gravity.CENTER
-            hintTextView?.visibility = View.GONE
-        }
-    }
-
     private fun applyNoAltTextPosition() {
         // mainText centered vertically, hintText below it
         mainText.updateLayoutParams<ConstraintLayout.LayoutParams> {
@@ -649,34 +597,23 @@ class AltTextKeyView(
         val pref = ThemeManager.prefs.punctuationPosition.getValue()
         if (pref == PunctuationPosition.None) return AltTextLayoutMode.Hidden
 
-        val preferred = when (pref) {
-            PunctuationPosition.TopRight -> AltTextLayoutMode.TopRight
-            PunctuationPosition.Bottom -> when (orientation) {
-                Configuration.ORIENTATION_LANDSCAPE -> AltTextLayoutMode.TopRight
-                else -> AltTextLayoutMode.Bottom
-            }
-            PunctuationPosition.None -> AltTextLayoutMode.Hidden
-        }
+        // PunctuationPosition.TopRight is the only visible option now
+        val preferred = AltTextLayoutMode.TopRight
         if (keyHeight <= 0) return preferred
 
         val contentHeight = keyHeight - vMargin * 2
         val mainHeight = mainText.paint.run { fontMetrics.bottom - fontMetrics.top }
         val altHeight = altText.paint.run { fontMetrics.bottom - fontMetrics.top }
         val hintHeight = if (isHintTextVisible()) hintTextView?.paint?.run { fontMetrics.bottom - fontMetrics.top } ?: 0f else 0f
+
+        // In landscape mode, check if hint text would overflow key bounds
+        val landscape = orientation == Configuration.ORIENTATION_LANDSCAPE
         val compactMinHeight = max(mainHeight, altHeight + dp(4))
         val stackedMinHeight = mainHeight + altHeight + hintHeight + dp(6)
 
-        return when (preferred) {
-            AltTextLayoutMode.Bottom -> when {
-                contentHeight >= stackedMinHeight -> AltTextLayoutMode.Bottom
-                contentHeight >= compactMinHeight -> AltTextLayoutMode.TopRight
-                else -> AltTextLayoutMode.Hidden
-            }
-            AltTextLayoutMode.TopRight -> when {
-                contentHeight >= compactMinHeight -> AltTextLayoutMode.TopRight
-                else -> AltTextLayoutMode.Hidden
-            }
-            AltTextLayoutMode.Hidden -> AltTextLayoutMode.Hidden
+        return when {
+            contentHeight >= compactMinHeight -> AltTextLayoutMode.TopRight
+            else -> AltTextLayoutMode.Hidden
         }
     }
 
@@ -685,7 +622,6 @@ class AltTextKeyView(
         if (mode == lastLayoutMode) return
         lastLayoutMode = mode
         when (mode) {
-            AltTextLayoutMode.Bottom -> applyBottomAltTextPosition()
             AltTextLayoutMode.TopRight -> applyTopRightAltTextPosition()
             AltTextLayoutMode.Hidden -> applyNoAltTextPosition()
         }

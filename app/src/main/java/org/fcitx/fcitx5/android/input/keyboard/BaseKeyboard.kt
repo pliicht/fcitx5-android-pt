@@ -909,7 +909,7 @@ abstract class BaseKeyboard(
                         // CustomAltPreview respects the global popupOnKeyPress toggle for
                         // the default character preview on tap. When popupOnKeyPress is off,
                         // only direction-specific swipe popups are shown.
-                        // When swiping to a direction with popup text, commit that text on release.
+                        // Popup hint text is display-only — it does NOT commit text on release.
                         val oldOnGestureListener = onGestureListener ?: OnGestureListener.Empty
                         var currentDirectionPopupText: String? = null
                         var previewShown = false
@@ -971,11 +971,8 @@ abstract class BaseKeyboard(
                                     if (previewShown) {
                                         onPopupAction(PopupAction.DismissAction(view.id))
                                     }
-                                    // If a direction-specific popup text was shown, commit it as input
-                                    currentDirectionPopupText?.let { popupText ->
-                                        onAction(KeyAction.CommitAction(popupText))
-                                        currentDirectionPopupText = null
-                                    }
+                                    // Popup hint text is display-only, do NOT commit it as input
+                                    currentDirectionPopupText = null
                                 }
                             }
                             // never consume gesture in preview popup

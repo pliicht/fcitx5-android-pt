@@ -31,9 +31,13 @@ class PopupEntryUi(override val ctx: Context, theme: Theme, keyHeight: Int, radi
             "popup_key_font", 23f
         )
         setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, fontSize)
+        scaleMode = AutoScaleTextView.Mode.Proportional
         gravity = gravityCenter
         setTextColor(theme.popupTextColor)
         setFontTypeFace("popup_key_font")
+        // Add horizontal padding so text stays within the bubble
+        val pad = ctx.dp(4)
+        setPadding(pad, 0, pad, 0)
     }
 
     override val root = constraintLayout {
